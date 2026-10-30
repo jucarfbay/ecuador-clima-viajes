@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+site/data/
+site_demo/
+archivo/

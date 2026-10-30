@@ -1,0 +1,75 @@
+name: Datos y publicación
+
+on:
+  schedule:
+    - cron: "7 * * * *"   # cada hora; el pronóstico solo se recalcula si tiene más de 5,5 h
+  workflow_dispatch:
+    inputs:
+      forzar:
+        description: "Recalcular el pronóstico aunque esté vigente"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ["site/**", "pipeline/**", "config/**", ".github/workflows/datos.yml"]
+
+permissions:
+  contents: write   # subir el archivo histórico como versión (release)
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  construir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pruebas
+        run: python -m unittest discover -s tests -v
+
+      - name: Descargar y calcular
+        env:
+          SITIO_PREVIO: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data
+        run: |
+          ARGS="--salida site/data --archivo archivo"
+          if [ "${{ inputs.forzar }}" = "true" ]; then ARGS="$ARGS --forzar-pronostico"; fi
+          python -m pipeline.run $ARGS
+
+      - name: Guardar archivo histórico (versión mensual)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(archivo/*.json.gz)
+          if [ ${#files[@]} -eq 0 ]; then echo "Nada que archivar"; exit 0; fi
+          TAG="archivo-$(date -u +%Y-%m)"
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --prerelease --title "Archivo $(date -u +%Y-%m)" \
+              --notes "Pronósticos (miembros del ensamble por punto) y lluvia observada de estaciones, para calibrar (Plan 5)."
+          gh release upload "$TAG" "${files[@]}" --clobber
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  publicar:
+    needs: construir
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

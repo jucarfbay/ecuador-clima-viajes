@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alerta de lluvias Ecuador</title>
+  <meta name="description" content="Pronóstico probabilístico de lluvia para viajes y lugares en Ecuador, con datos públicos de ECMWF, NOAA, NASA e INAMHI.">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+  <header class="cabecera">
+    <div class="cabecera-fila">
+      <h1>Alerta de lluvias <span class="pais">Ecuador</span></h1>
+      <span class="sello" title="Los umbrales y cortes de probabilidad aún no se han verificado con datos observados">No calibrado</span>
+    </div>
+    <div id="frescura" class="frescura" role="status" aria-live="polite">Cargando datos…</div>
+  </header>
+
+  <nav class="pestanas" role="tablist" aria-label="Secciones">
+    <button role="tab" aria-selected="true" data-pestana="viaje">Viaje</button>
+    <button role="tab" aria-selected="false" data-pestana="lugares">Lugares</button>
+    <button role="tab" aria-selected="false" data-pestana="mapa">Mapa</button>
+    <button role="tab" aria-selected="false" data-pestana="provincias">Provincias</button>
+  </nav>
+
+  <main>
+    <section id="viaje" class="panel" role="tabpanel">
+      <div class="controles">
+        <label>Ruta <select id="ruta"></select></label>
+        <label>Salida <select id="salida"></select></label>
+      </div>
+      <div id="viaje-respuesta" class="respuesta"></div>
+      <ol id="viaje-tramos" class="tramos"></ol>
+      <div id="viaje-observado" class="observado"></div>
+      <p class="aviso">Evalúa solo lluvia. <strong>No evalúa deslaves ni el estado de la vía:</strong>
+        revisa la <a href="https://www.ecu911.gob.ec/consulta-de-vias/" target="_blank" rel="noopener">consulta de vías del ECU 911</a>
+        y las <a href="https://www.inamhi.gob.ec/" target="_blank" rel="noopener">advertencias del INAMHI</a> antes de salir.</p>
+    </section>
+
+    <section id="lugares" class="panel" role="tabpanel" hidden>
+      <div id="lugares-lista"></div>
+    </section>
+
+    <section id="mapa-panel" class="panel panel-mapa" role="tabpanel" hidden>
+      <div class="mapa-barra">
+        <label class="hora-mapa">Hora del pronóstico
+          <input id="hora-mapa" type="range" min="0" max="71" value="0" step="1">
+        </label>
+        <output id="hora-mapa-texto" class="etiqueta-capa pronostico">PRONÓSTICO —</output>
+      </div>
+      <div id="mapa" aria-label="Mapa de lluvia sobre imagen satelital"></div>
+      <div id="mapa-leyenda" class="leyenda"></div>
+    </section>
+
+    <section id="provincias" class="panel" role="tabpanel" hidden>
+      <p class="intro">Peor nivel entre los puntos de cada provincia, por día. Toca una provincia para ver sus puntos.</p>
+      <div class="tabla-envoltura"><table id="tabla-provincias"></table></div>
+      <div id="provincia-detalle"></div>
+    </section>
+  </main>
+
+  <footer class="pie">
+    <p><strong>Complementa, no reemplaza, los avisos oficiales.</strong> Ante una advertencia o emergencia, mandan el
+      <a href="https://www.inamhi.gob.ec/" target="_blank" rel="noopener">INAMHI</a>, la
+      <a href="https://www.gestionderiesgos.gob.ec/" target="_blank" rel="noopener">SNGR</a> y el ECU 911.</p>
+    <p class="atribucion">Pronóstico: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0),
+      ECMWF IFS y AIFS (CC BY 4.0), NOAA GEFS. Estaciones: visor del INAMHI. Imágenes: NASA GIBS/EOSDIS (GOES-East, GPM IMERG).
+      Fondo: <a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless</a> by EOX IT Services GmbH
+      (Contains modified Copernicus Sentinel data 2024), CC BY-NC-SA 4.0. Etiquetas: © OpenStreetMap, © CARTO. Uso personal, no comercial.</p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

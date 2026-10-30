@@ -1,0 +1,56 @@
+{
+  "version": "2026-10-29",
+  "estado": "no calibrado",
+  "nota": "Limites inferiores de los niveles de lluvia diaria (mm/24 h) de las advertencias meteorologicas del INAMHI. Cambian entre advertencias: se versionan con fecha y fuente. Sirven como etiqueta y disparador provisional hasta tener umbrales por percentil del modelo (Plan 5, etapa 1).",
+  "regiones": {
+    "Litoral": {
+      "medio": 10,
+      "alto": 19,
+      "muy_alto": 42,
+      "fuente": "Advertencias N.° 10 y N.° 83 (2026)"
+    },
+    "Insular": {
+      "medio": 10,
+      "alto": 19,
+      "muy_alto": 42,
+      "fuente": "Mismos rangos que Litoral (advertencias 'Litoral e Insular')"
+    },
+    "Interandina": {
+      "medio": 8,
+      "alto": 12,
+      "muy_alto": 31,
+      "fuente": "Advertencias N.° 79 y N.° 83 (oct 2026): alto 12-30 mm; muy alto inferido como >30 mm"
+    },
+    "Amazonia": {
+      "medio": 22,
+      "alto": 32,
+      "muy_alto": 61,
+      "fuente": "Advertencia N.° 79 (oct 2026): alto 32-60 mm; muy alto inferido como >60 mm. Pendiente de confirmar con el INAMHI"
+    }
+  },
+  "bloques_3h": {
+    "nota": "Totales en 3 h equivalentes a la intensidad media de las clases de la AMS (moderada 2,5 mm/h -> 7,5 mm en 3 h; fuerte 7,6 mm/h -> 22,8 mm en 3 h). El modelo suaviza los aguaceros locales, asi que subestima los picos. No son umbrales del INAMHI; sin calibrar.",
+    "ligera_mm": 0.5,
+    "moderada_mm": 7.5,
+    "fuerte_mm": 22.8
+  },
+  "cortes_probabilidad": {
+    "nota": "Propuesta inicial sin calibrar (Analisis 3).",
+    "actuar": {
+      "muy_alto": 0.5
+    },
+    "prepararse": {
+      "alto": 0.6,
+      "muy_alto": 0.3
+    },
+    "vigilar": {
+      "alto": 0.3,
+      "medio": 0.6
+    }
+  },
+  "horaria": {
+    "nota": "Clases por hora para el planificador de viajes (AMS): moderada >=2,5 mm/h; fuerte >=7,6 mm/h. Los valores horarios del ensamble son promedios de 3 h.",
+    "moderada_mm_h": 2.5,
+    "fuerte_mm_h": 7.6
+  }
+}

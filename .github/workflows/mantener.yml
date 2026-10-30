@@ -1,0 +1,24 @@
+name: Mantener activo
+
+# GitHub desactiva los flujos programados de un repositorio público tras 60 días sin actividad.
+# Este flujo hace un commit mínimo cada mes para evitarlo.
+on:
+  schedule:
+    - cron: "17 6 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  latido:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          date -u +"%Y-%m-%dT%H:%MZ" > .latido
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .latido
+          git commit -m "Latido mensual para mantener activos los flujos programados" || exit 0
+          git push

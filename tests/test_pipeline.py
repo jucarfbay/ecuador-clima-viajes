@@ -1,0 +1,167 @@
+"""Pruebas sin red: un Http falso devuelve respuestas con el mismo formato que Open-Meteo y el INAMHI."""
+import json
+import math
+import sys
+import tempfile
+import unittest
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from unittest import mock
+
+RAIZ = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(RAIZ))
+
+from pipeline import calculo, run  # noqa: E402
+from pipeline.fuentes import ENSEMBLE_URL, FORECAST_URL, INAMHI_API  # noqa: E402
+
+ECU = timezone(timedelta(hours=-5))
+AHORA = datetime(2026, 10, 29, 20, 30, tzinfo=ECU)
+
+
+def tiempos_locales(dias):
+    t0 = datetime(2026, 10, 29, 0, 0)
+    return [(t0 + timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M") for h in range(24 * dias)]
+
+
+def respuesta_ensamble(n_puntos, n_miembros, dias, mm_por_hora):
+    t = tiempos_locales(dias)
+    out = []
+    for _ in range(n_puntos):
+        hourly = {"time": t, "precipitation": [mm_por_hora(0, i) for i in range(len(t))]}
+        for m in range(1, n_miembros):
+            hourly[f"precipitation_member{m:02d}"] = [mm_por_hora(m, i) for i in range(len(t))]
+        out.append({"latitude": 0, "longitude": 0, "elevation": 2000.0, "hourly": hourly})
+    return out
+
+
+class HttpFalso:
+    def __init__(self, mm_por_hora):
+        self.mm = mm_por_hora
+        self.llamadas = 0
+
+    def get(self, url, params=None):
+        self.llamadas += 1
+        params = params or {}
+        if url == ENSEMBLE_URL:
+            n = len(params["latitude"].split(","))
+            miembros = {"ecmwf_ifs025": 51, "ecmwf_aifs025_ensemble": 51, "ncep_gefs025": 31}[params["models"]]
+            return respuesta_ensamble(n, miembros, params["forecast_days"], self.mm)
+        if url == FORECAST_URL:
+            n = len(params["latitude"].split(","))
+            t = tiempos_locales(params["forecast_days"])
+            return [{"hourly": {"time": t, "precipitation": [0.2] * len(t)}} for _ in range(n)]
+        if url.endswith("estaciones/visores/"):
+            return [
+                {"id_estacion": 1, "codigo": "M1", "estado_transmision": "TRANSMITIENDO", "latitud": "-0.2",
+                 "longitud": "-78.5", "altitud": "2800", "propietario": "EPMAPS", "frecuencia_transmision": "5 MINUTOS"},
+                {"id_estacion": 2, "codigo": "M2", "estado_transmision": "SIN TRANSMISION", "latitud": "-1",
+                 "longitud": "-78", "altitud": "2000", "propietario": "INAMHI", "frecuencia_transmision": "1 HORA"},
+            ]
+        if url.endswith("station_information/parametros/"):
+            return [{"id_param": 17, "params": [{"nemonico": "017140801h"}]}]
+        if url.endswith("station_information/estaciones/"):
+            return [{"punto_obs": "TOCTIUCO - EPMAPS QUITO", "provincia": "PICHINCHA"}]
+        raise AssertionError("URL inesperada " + url)
+
+    def post(self, url, body):
+        self.llamadas += 1
+        assert url == INAMHI_API + "station_data_hour/get_precipitation/"
+        fin = datetime(2026, 10, 30, 0, 0, tzinfo=timezone.utc)
+        data = [{"fecha": (fin - timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%S+00:00"), "valor": 1.0}
+                for h in range(359, -1, -1)]
+        return [{"name": "PRECIPITACION ACUMULADA HORARIA", "data": data},
+                {"name": "PRECIPITACION ACUMULADA DIARIA", "data": []}]
+
+
+class TestCalculo(unittest.TestCase):
+    def test_dia_hora_final(self):
+        # 1 mm/h constante. El 30 de oct (completo) suma 24 horas: de 01:00 del 30 a 00:00 del 31.
+        t = tiempos_locales(3)
+        dias = calculo.acumulados_diarios(t, [[1.0] * len(t)], AHORA)
+        self.assertEqual(dias[0]["fecha"], "2026-10-29")
+        self.assertTrue(dias[0]["parcial"])
+        self.assertEqual(dias[0]["horas"], 4)  # 20-21, 21-22, 22-23, 23-24
+        self.assertEqual(dias[1], {"fecha": "2026-10-30", "parcial": False, "horas": 24, "totales": [24.0]})
+        self.assertEqual(len(dias), 2)  # el 31 queda incompleto (falta la hora que termina el 1 nov 00:00)
+
+    def test_diez_dias_completos(self):
+        t = tiempos_locales(12)
+        dias = calculo.acumulados_diarios(t, [[1.0] * len(t)], AHORA)
+        self.assertEqual(len(dias), 11)  # resto de hoy + 10 días completos
+        self.assertTrue(all(d["horas"] == 24 for d in dias[1:]))
+
+    def test_prob_y_percentil(self):
+        self.assertAlmostEqual(calculo.prob([0, 5, 10, 20], 10), 0.5)
+        self.assertAlmostEqual(calculo.percentil([0, 10], 0.5), 5)
+        self.assertIsNone(calculo.prob([float("nan")], 1))
+
+    def test_niveles(self):
+        c = json.loads((RAIZ / "config/umbrales.json").read_text())["cortes_probabilidad"]
+        self.assertEqual(calculo.nivel_desde_probs({"medio": 0.1, "alto": 0.05, "muy_alto": 0}, c), 0)
+        self.assertEqual(calculo.nivel_desde_probs({"medio": 0.6, "alto": 0.1, "muy_alto": 0}, c), 1)
+        self.assertEqual(calculo.nivel_desde_probs({"medio": 0.9, "alto": 0.6, "muy_alto": 0.1}, c), 2)
+        self.assertEqual(calculo.nivel_desde_probs({"medio": 0.9, "alto": 0.4, "muy_alto": 0.3}, c), 2)
+        self.assertEqual(calculo.nivel_desde_probs({"medio": 1, "alto": 1, "muy_alto": 0.5}, c), 3)
+
+    def test_combinar_renormaliza(self):
+        pesos = {"a": 0.5, "b": 0.3, "c": 0.2}
+        self.assertAlmostEqual(calculo.combinar({"a": 1.0, "b": 0.0, "c": None}, pesos), 0.625)
+
+    def test_confianza(self):
+        self.assertEqual(calculo.confianza(2, 0.1), "alta")
+        self.assertEqual(calculo.confianza(2, 0.5), "media")
+        self.assertEqual(calculo.confianza(9, 0.5), "tendencia")
+
+    def test_bloques(self):
+        t = tiempos_locales(4)
+        # la mitad de los miembros llueve 8 mm/h (24 mm por bloque: fuerte), la otra mitad 3 mm/h (9 mm: moderada)
+        miembros = [[8.0] * len(t) if m % 2 else [3.0] * len(t) for m in range(10)]
+        bl = calculo.bloques_3h(t, miembros, AHORA, 24)
+        self.assertEqual(bl[0]["inicio"], "2026-10-29T18:00")
+        self.assertTrue(bl[0]["en_curso"])
+        self.assertAlmostEqual(bl[0]["p_fuerte"], 0.5)
+        self.assertAlmostEqual(bl[0]["p_moderada"], 1.0)
+        self.assertEqual(calculo.clase_bloque(bl[0]), 3)
+
+
+class TestPipeline(unittest.TestCase):
+    def test_extremo_a_extremo(self):
+        # Llueve más en los miembros altos: miembro m llueve m/20 mm/h -> totales diarios 0..60 mm
+        http = HttpFalso(lambda m, i: m / 20)
+        cfg = json.loads((RAIZ / "config/puntos.json").read_text())
+        umb = json.loads((RAIZ / "config/umbrales.json").read_text())
+        pron, arch = run.pronostico(http, cfg, umb, AHORA)
+        self.assertEqual(len(pron["puntos"]), len(cfg["puntos"]))
+        quito = next(p for p in pron["puntos"] if p["id"] == "quito")
+        d1 = quito["dias"][1]
+        self.assertEqual(d1["fecha"], "2026-10-30")
+        # IFS: miembro m suma 24*m/20 = 1.2 m mm; >=12 mm (alto Interandina) cuando m>=10 -> 41/51
+        self.assertAlmostEqual(d1["p_alto_por_modelo"]["ecmwf_ifs025"], round(41 / 51, 2))
+        self.assertIn(d1["nivel"], (2, 3))
+        self.assertEqual(len(pron["provincias"]), 24)
+        self.assertIn("banos", pron["detalle"])
+        self.assertEqual(len(pron["detalle"]["banos"]["horaria"]["tiempos"]), 72)
+        self.assertEqual(len(pron["detalle"]["banos"]["horaria"]["miembros_dmm"]), 51)
+
+    def test_main_completo(self):
+        http = HttpFalso(lambda m, i: 0.1)
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(run, "Http", return_value=http), \
+                mock.patch.object(run, "datetime", wraps=datetime) as dt:
+            dt.now.return_value = AHORA
+            codigo = run.main(["--salida", f"{tmp}/data", "--archivo", f"{tmp}/arch"])
+            self.assertEqual(codigo, 0)
+            est = json.loads(Path(f"{tmp}/data/estaciones.json").read_text())
+            self.assertEqual(len(est["estaciones"]), 1)
+            e = est["estaciones"][0]
+            self.assertEqual(e["nombre"], "TOCTIUCO - EPMAPS QUITO")
+            self.assertEqual(e["mm_24h"], 24.0)
+            self.assertEqual(e["ultimo"], "2026-10-29T19:00-05:00")
+            calor = json.loads(Path(f"{tmp}/data/calor.json").read_text())
+            self.assertEqual(len(calor["tiempos"]), 72)  # 4 días desde las 00:00 -> 72 h completas desde las 21:00
+            self.assertEqual(len(calor["valores_dmm"][0]), len(calor["lats"]) * len(calor["lons"]))
+            self.assertTrue(list(Path(f"{tmp}/arch").glob("pronostico_*.json.gz")))
+
+
+if __name__ == "__main__":
+    unittest.main()
