@@ -137,18 +137,20 @@ def construir(respuesta: dict, hitos: list[dict], url: str, consultado: str) -> 
 
 
 def geocodificar(o: dict) -> dict:
-    """Coordenada del origen según OpenStreetMap (Nominatim), con la fuente para citarla."""
+    """Coordenada del origen según OpenStreetMap (Nominatim), con la fuente para citarla. Se prefiere el lugar poblado
+    (parroquia, barrio) o su límite administrativo frente a un comercio que lleve el mismo nombre."""
     import urllib.parse
-    # featureType=settlement: el lugar poblado (parroquia o barrio), no un comercio que lleve su nombre.
-    q = urllib.parse.urlencode({"q": o["consulta"], "format": "jsonv2", "limit": 1, "countrycodes": "ec",
-                                "featureType": "settlement"})
+    q = urllib.parse.urlencode({"q": o["consulta"], "format": "jsonv2", "limit": 10, "countrycodes": "ec"})
     req = urllib.request.Request(f"{NOMINATIM}?{q}", headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=60) as resp:
-        r = json.loads(resp.read().decode("utf-8"))
-    if not r:
+        res = json.loads(resp.read().decode("utf-8"))
+    for x in res:  # visible en las anotaciones del flujo
+        print(f"::notice title=Nominatim::{x.get('category')}/{x.get('type')} {x['lat']},{x['lon']} {x.get('display_name')}")
+    if not res:
         raise SystemExit(f"Nominatim no encontró «{o['consulta']}»")
-    r = r[0]
-    print("origen:", r.get("display_name"), r["lat"], r["lon"], r.get("category"), r.get("type"))
+    orden = lambda x: (0 if x.get("category") == "place" else 1 if x.get("category") == "boundary" else 2)  # noqa: E731
+    r = sorted(res, key=orden)[0]  # sorted es estable: dentro de cada grupo, el orden de relevancia de Nominatim
+    print(f"::notice title=Origen::{r.get('category')}/{r.get('type')} {r['lat']},{r['lon']} {r.get('display_name')}")
     return {**o, "lat": round(float(r["lat"]), 5), "lon": round(float(r["lon"]), 5),
             "geocodificado": {"fuente": "OpenStreetMap Nominatim", "nombre": r.get("display_name"),
                               "osm": f"{r.get('osm_type')}/{r.get('osm_id')}", "tipo": f"{r.get('category')}/{r.get('type')}"}}
