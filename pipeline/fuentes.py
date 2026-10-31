@@ -71,27 +71,45 @@ def _lotes(seq, n):
         yield seq[i:i + n]
 
 
+TZ_GALAPAGOS = "Pacific/Galapagos"
+
+
+def zona_de(p: dict) -> str:
+    """Zona horaria del punto: Galápagos (UTC-6) para la región Insular; el resto, UTC-5."""
+    return TZ_GALAPAGOS if p.get("region") == "Insular" else TZ
+
+
 def ensamble(http: Http, modelo: str, puntos: list[dict], dias: int = 12, lote: int = 25) -> dict:
-    """Devuelve {id_punto: {"tiempos": [...], "miembros": [[mm por hora] x miembro], "elevacion": m}}."""
+    """Devuelve {id_punto: {"tiempos": [...], "miembros": [[mm por hora] x miembro], "elevacion": m, "utc_offset_s": s}}.
+
+    Cada punto se pide en su propia zona horaria, para que los días y bloques correspondan a su hora local.
+    """
     salida = {}
-    for grupo in _lotes(puntos, lote):
-        params = {
-            "latitude": ",".join(str(p["lat"]) for p in grupo),
-            "longitude": ",".join(str(p["lon"]) for p in grupo),
-            "hourly": "precipitation",
-            "models": modelo,
-            "forecast_days": dias,
-            "timezone": TZ,
-        }
-        resp = http.get(ENSEMBLE_URL, params)
-        resp = resp if isinstance(resp, list) else [resp]
-        if len(resp) != len(grupo):
-            raise RuntimeError(f"{modelo}: se pidieron {len(grupo)} puntos y llegaron {len(resp)}")
-        for p, r in zip(grupo, resp):
-            h = r["hourly"]
-            claves = ["precipitation"] + sorted(k for k in h if k.startswith("precipitation_member"))
-            miembros = [[(v if v is not None else float("nan")) for v in h[k]] for k in claves if k in h]
-            salida[p["id"]] = {"tiempos": h["time"], "miembros": miembros, "elevacion": r.get("elevation")}
+    por_zona: dict[str, list[dict]] = {}
+    for p in puntos:
+        por_zona.setdefault(zona_de(p), []).append(p)
+    for zona, pts in por_zona.items():
+        for grupo in _lotes(pts, lote):
+            params = {
+                "latitude": ",".join(str(p["lat"]) for p in grupo),
+                "longitude": ",".join(str(p["lon"]) for p in grupo),
+                "hourly": "precipitation",
+                "models": modelo,
+                "forecast_days": dias,
+                "timezone": zona,
+            }
+            resp = http.get(ENSEMBLE_URL, params)
+            resp = resp if isinstance(resp, list) else [resp]
+            if len(resp) != len(grupo):
+                raise RuntimeError(f"{modelo}: se pidieron {len(grupo)} puntos y llegaron {len(resp)}")
+            for p, r in zip(grupo, resp):
+                h = r["hourly"]
+                claves = ["precipitation"] + sorted(k for k in h if k.startswith("precipitation_member"))
+                miembros = [[(v if v is not None else float("nan")) for v in h[k]] for k in claves if k in h]
+                salida[p["id"]] = {
+                    "tiempos": h["time"], "miembros": miembros, "elevacion": r.get("elevation"),
+                    "utc_offset_s": r.get("utc_offset_seconds", -18000 if zona == TZ else -21600),
+                }
     return salida
 
 

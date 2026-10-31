@@ -2,7 +2,7 @@ name: Datos y publicación
 
 on:
   schedule:
-    - cron: "7 * * * *"   # cada hora; el pronóstico solo se recalcula si tiene más de 5,5 h
+    - cron: "7 * * * *"   # cada hora (GitHub suele retrasarlo; ver README: disparador externo). El pronóstico solo se recalcula si tiene más de 5,5 h
   workflow_dispatch:
     inputs:
       forzar:
@@ -33,14 +33,34 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Pruebas
-        run: python -m unittest discover -s tests -v
+        run: |
+          python -m unittest discover -s tests -v
+          node --test tests/logica.test.js
+
+      - name: Respaldo del último pronóstico archivado (por si el sitio no responde)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p previo
+          for TAG in "archivo-$(date -u +%Y-%m)" "archivo-$(date -u -d '-1 month' +%Y-%m)"; do
+            for PRE in pronostico calor; do
+              ls previo/${PRE}_*.json.gz >/dev/null 2>&1 && continue
+              ULT=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq "[.assets[].name | select(startswith(\"${PRE}_\"))] | sort | last // empty" 2>/dev/null || true)
+              if [ -n "$ULT" ]; then gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "$ULT" -D previo --clobber || true; fi
+            done
+          done
+          ls -la previo
 
       - name: Descargar y calcular
         env:
           SITIO_PREVIO: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data
         run: |
-          ARGS="--salida site/data --archivo archivo"
+          ARGS="--salida site/data --archivo archivo --previo-archivo previo"
           if [ "${{ inputs.forzar }}" = "true" ]; then ARGS="$ARGS --forzar-pronostico"; fi
           python -m pipeline.run $ARGS
 
@@ -61,8 +81,9 @@ jobs:
       - name: Versionar archivos estáticos (evita que el navegador use una versión vieja)
         run: |
           V="${GITHUB_SHA::7}"
-          sed -i "s|src=\"app.js\"|src=\"app.js?v=$V\"|; s|href=\"estilos.css\"|href=\"estilos.css?v=$V\"|" site/index.html
-          grep -q "app.js?v=$V" site/index.html
+          sed -i "s|src=\"app.js\"|src=\"app.js?v=$V\"|; s|src=\"logica.js\"|src=\"logica.js?v=$V\"|; s|href=\"estilos.css\"|href=\"estilos.css?v=$V\"|" site/index.html
+          sed -i "s|^const VERSION = \"dev\";|const VERSION = \"$V\";|" site/app.js
+          grep -q "app.js?v=$V" site/index.html && grep -q "logica.js?v=$V" site/index.html && grep -q "VERSION = \"$V\"" site/app.js
 
       - uses: actions/configure-pages@v5
 

@@ -2,75 +2,120 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Alerta de lluvias Ecuador</title>
-  <meta name="description" content="Pronóstico probabilístico de lluvia para viajes y lugares en Ecuador, con datos públicos de ECMWF, NOAA, NASA e INAMHI.">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lluvia en Ecuador</title>
+  <meta name="description" content="Pronóstico probabilístico de lluvia para lugares y viajes en Ecuador, con datos públicos de ECMWF, NOAA, NASA e INAMHI.">
+  <meta name="theme-color" content="#EEF1EC" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111A20" media="(prefers-color-scheme: dark)">
+  <link rel="preload" href="fuentes/overpass-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fuentes/overpass-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
+  <a class="saltar" href="#principal">Ir al contenido</a>
   <header class="cabecera">
-    <div class="cabecera-fila">
-      <h1>Alerta de lluvias <span class="pais">Ecuador</span></h1>
-      <span class="sello" title="Los umbrales y cortes de probabilidad aún no se han verificado con datos observados">No calibrado</span>
-    </div>
-    <div id="frescura" class="frescura" role="status" aria-live="polite">Cargando datos…</div>
+    <h1 class="marca">Lluvia en Ecuador</h1>
+    <button id="frescura" class="frescura" type="button" aria-expanded="false" aria-controls="frescura-panel">Cargando…</button>
   </header>
+  <div id="frescura-panel" class="frescura-panel" hidden></div>
+  <div id="sin-conexion" class="banda-aviso" role="status" hidden></div>
 
-  <nav class="pestanas" role="tablist" aria-label="Secciones">
-    <button role="tab" aria-selected="true" data-pestana="viaje">Viaje</button>
-    <button role="tab" aria-selected="false" data-pestana="lugares">Lugares</button>
-    <button role="tab" aria-selected="false" data-pestana="mapa">Mapa</button>
-    <button role="tab" aria-selected="false" data-pestana="provincias">Provincias</button>
-  </nav>
+  <main id="principal">
+    <div id="error-carga" class="error-carga" hidden></div>
 
-  <main>
-    <section id="viaje" class="panel" role="tabpanel">
-      <div class="controles">
-        <label>Ruta <select id="ruta"></select></label>
-        <label>Salida <select id="salida"></select></label>
+    <!-- LUGARES (inicio) -->
+    <section id="lugares" class="panel" aria-labelledby="nav-lugares">
+      <div class="selector" role="group" aria-label="Tus lugares">
+        <div id="chips" class="chips"></div>
       </div>
-      <div id="viaje-respuesta" class="respuesta"></div>
-      <ol id="viaje-tramos" class="tramos"></ol>
-      <div id="viaje-observado" class="observado"></div>
-      <p class="aviso">Evalúa solo lluvia. <strong>No evalúa deslaves ni el estado de la vía:</strong>
+      <div id="lugar"></div>
+    </section>
+
+    <!-- VIAJE -->
+    <section id="viaje" class="panel" aria-labelledby="nav-viaje" hidden>
+      <div class="viaje-cab">
+        <label class="campo">Ruta <select id="ruta"></select></label>
+      </div>
+      <div class="viaje-dias">
+        <div id="viaje-fechas" class="chips" role="group" aria-label="Día de salida"></div>
+        <label class="interruptor"><input id="viaje-noche" type="checkbox"> Incluir salidas de noche</label>
+      </div>
+      <figure class="salidas-fig">
+        <figcaption>Lluvia esperada en toda la ruta según la hora de salida. Toca una barra para elegirla.</figcaption>
+        <div id="salidas" class="salidas" role="radiogroup" aria-label="Hora de salida"></div>
+      </figure>
+      <div id="viaje-respuesta" class="respuesta pronostico" aria-live="polite"></div>
+      <ol id="viaje-ruta" class="carretera"></ol>
+      <div id="viaje-medido" class="medido"></div>
+      <p class="nota">Evalúa solo lluvia. <strong>No evalúa deslaves ni el estado de la vía:</strong>
         revisa la <a href="https://www.ecu911.gob.ec/consulta-de-vias/" target="_blank" rel="noopener">consulta de vías del ECU 911</a>
         y las <a href="https://www.inamhi.gob.ec/" target="_blank" rel="noopener">advertencias del INAMHI</a> antes de salir.</p>
     </section>
 
-    <section id="lugares" class="panel" role="tabpanel" hidden>
-      <div id="lugares-lista"></div>
-    </section>
-
-    <section id="mapa-panel" class="panel panel-mapa" role="tabpanel" hidden>
-      <div class="mapa-barra">
-        <label class="hora-mapa">Hora del pronóstico
-          <input id="hora-mapa" type="range" min="0" max="71" value="0" step="1">
-        </label>
-        <output id="hora-mapa-texto" class="etiqueta-capa pronostico">PRONÓSTICO —</output>
-      </div>
+    <!-- MAPA -->
+    <section id="mapa-panel" class="panel panel-mapa" aria-labelledby="nav-mapa" hidden>
       <div id="mapa" aria-label="Mapa de lluvia sobre imagen satelital"></div>
-      <div id="mapa-leyenda" class="leyenda"></div>
+      <div id="hoja" class="hoja" role="dialog" aria-modal="false" aria-labelledby="hoja-titulo" hidden></div>
+      <div class="reproductor">
+        <button id="play" class="boton-icono" type="button" aria-label="Reproducir las próximas horas" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5v14l11-7z"/><path class="i-pausa" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+        </button>
+        <div class="reproductor-pista">
+          <input id="hora-mapa" type="range" min="0" max="71" value="0" step="1" aria-describedby="hora-mapa-texto">
+          <div id="marcas-dia" class="marcas-dia" aria-hidden="true"></div>
+        </div>
+        <output id="hora-mapa-texto" class="hora-mapa-texto">—</output>
+      </div>
     </section>
 
-    <section id="provincias" class="panel" role="tabpanel" hidden>
-      <p class="intro">Peor nivel entre los puntos de cada provincia, por día. Toca una provincia para ver sus puntos.</p>
-      <div class="tabla-envoltura"><table id="tabla-provincias"></table></div>
-      <div id="provincia-detalle"></div>
+    <!-- PROVINCIAS -->
+    <section id="provincias" class="panel" aria-labelledby="nav-provincias" hidden>
+      <h2 class="titulo-seccion">Provincias</h2>
+      <p class="nota">Nivel más alto entre los puntos de cada provincia y cuántos lo alcanzan. Toca una provincia para ver sus puntos.</p>
+      <div id="prov-fechas" class="chips" role="group" aria-label="Día"></div>
+      <ol id="prov-lista" class="prov-lista"></ol>
+      <details class="plegable">
+        <summary>Tabla de los próximos días</summary>
+        <div class="tabla-envoltura"><table id="tabla-provincias"></table></div>
+      </details>
     </section>
+
+    <footer class="pie">
+      <p><strong>Complementa, no reemplaza, los avisos oficiales.</strong> Ante una advertencia o emergencia, mandan el
+        <a href="https://www.inamhi.gob.ec/" target="_blank" rel="noopener">INAMHI</a>, la
+        <a href="https://www.gestionderiesgos.gob.ec/" target="_blank" rel="noopener">SNGR</a> y el ECU 911.</p>
+      <p class="atribucion">Pronóstico: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0),
+        ECMWF IFS y AIFS (CC BY 4.0), NOAA GEFS. Lluvia medida: visor del INAMHI. Imágenes: NASA GIBS/EOSDIS (GOES-East, GPM IMERG).
+        Fondo: <a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless</a> by EOX IT Services GmbH
+        (Contains modified Copernicus Sentinel data 2024), CC BY-NC-SA 4.0. Calles: © OpenStreetMap.
+        Tipografía Overpass (OFL). Uso personal, no comercial.</p>
+    </footer>
   </main>
 
-  <footer class="pie">
-    <p><strong>Complementa, no reemplaza, los avisos oficiales.</strong> Ante una advertencia o emergencia, mandan el
-      <a href="https://www.inamhi.gob.ec/" target="_blank" rel="noopener">INAMHI</a>, la
-      <a href="https://www.gestionderiesgos.gob.ec/" target="_blank" rel="noopener">SNGR</a> y el ECU 911.</p>
-    <p class="atribucion">Pronóstico: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0),
-      ECMWF IFS y AIFS (CC BY 4.0), NOAA GEFS. Estaciones: visor del INAMHI. Imágenes: NASA GIBS/EOSDIS (GOES-East, GPM IMERG).
-      Fondo: <a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless</a> by EOX IT Services GmbH
-      (Contains modified Copernicus Sentinel data 2024), CC BY-NC-SA 4.0. Calles: © OpenStreetMap. Uso personal, no comercial.</p>
-  </footer>
+  <nav class="navegacion" aria-label="Secciones">
+    <a id="nav-lugares" href="#lugares" data-panel="lugares">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="10" r="2.6"/></svg>Lugares</a>
+    <a id="nav-viaje" href="#viaje" data-panel="viaje">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2 5 22M15 2l4 20M12 4v3M12 11v3M12 18v3"/></svg>Viaje</a>
+    <a id="nav-mapa" href="#mapa" data-panel="mapa">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></svg>Mapa</a>
+    <a id="nav-provincias" href="#provincias" data-panel="provincias">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Provincias</a>
+  </nav>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <dialog id="dialogo-lugares" class="dialogo" aria-labelledby="dialogo-titulo">
+    <form method="dialog" class="dialogo-cab">
+      <h2 id="dialogo-titulo">Agregar lugar</h2>
+      <button class="boton-texto" value="cerrar">Listo</button>
+    </form>
+    <label class="buscar"><span class="visualmente-oculto">Buscar ciudad</span>
+      <input id="buscar-lugar" type="search" placeholder="Buscar ciudad o provincia" autocomplete="off"></label>
+    <div id="lista-lugares" class="lista-lugares"></div>
+  </dialog>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="logica.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

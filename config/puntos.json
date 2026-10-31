@@ -1,91 +1,68 @@
 {
   "nota": "Coordenadas aproximadas (centro urbano, ~1 km). 'region' decide los umbrales del INAMHI. Los puntos de zonas bajas de la Sierra usan Litoral.",
   "puntos": [
-    {"id": "esmeraldas", "nombre": "Esmeraldas", "provincia": "Esmeraldas", "region": "Litoral", "lat": 0.9682, "lon": -79.6517},
+    {"id": "esmeraldas", "nombre": "Esmeraldas", "provincia": "Esmeraldas", "region": "Litoral", "lat": 0.9682, "lon": -79.6517, "capital": true},
     {"id": "quininde", "nombre": "Quinindé", "provincia": "Esmeraldas", "region": "Litoral", "lat": 0.3268, "lon": -79.4689},
     {"id": "san-lorenzo", "nombre": "San Lorenzo", "provincia": "Esmeraldas", "region": "Litoral", "lat": 1.2867, "lon": -78.8358},
-
-    {"id": "portoviejo", "nombre": "Portoviejo", "provincia": "Manabí", "region": "Litoral", "lat": -1.0546, "lon": -80.4544},
+    {"id": "portoviejo", "nombre": "Portoviejo", "provincia": "Manabí", "region": "Litoral", "lat": -1.0546, "lon": -80.4544, "capital": true},
     {"id": "manta", "nombre": "Manta", "provincia": "Manabí", "region": "Litoral", "lat": -0.9677, "lon": -80.7089},
     {"id": "chone", "nombre": "Chone", "provincia": "Manabí", "region": "Litoral", "lat": -0.6984, "lon": -80.0936},
     {"id": "jipijapa", "nombre": "Jipijapa", "provincia": "Manabí", "region": "Litoral", "lat": -1.3486, "lon": -80.5786},
-
-    {"id": "santa-elena", "nombre": "Santa Elena", "provincia": "Santa Elena", "region": "Litoral", "lat": -2.2262, "lon": -80.8585},
+    {"id": "santa-elena", "nombre": "Santa Elena", "provincia": "Santa Elena", "region": "Litoral", "lat": -2.2262, "lon": -80.8585, "capital": true},
     {"id": "salinas", "nombre": "Salinas", "provincia": "Santa Elena", "region": "Litoral", "lat": -2.2146, "lon": -80.952},
-
-    {"id": "guayaquil", "nombre": "Guayaquil", "provincia": "Guayas", "region": "Litoral", "lat": -2.1894, "lon": -79.8891},
+    {"id": "guayaquil", "nombre": "Guayaquil", "provincia": "Guayas", "region": "Litoral", "lat": -2.1894, "lon": -79.8891, "capital": true},
     {"id": "milagro", "nombre": "Milagro", "provincia": "Guayas", "region": "Litoral", "lat": -2.1347, "lon": -79.5873},
     {"id": "daule", "nombre": "Daule", "provincia": "Guayas", "region": "Litoral", "lat": -1.8616, "lon": -79.9773},
     {"id": "balao", "nombre": "Balao", "provincia": "Guayas", "region": "Litoral", "lat": -2.9086, "lon": -79.8161},
-
-    {"id": "babahoyo", "nombre": "Babahoyo", "provincia": "Los Ríos", "region": "Litoral", "lat": -1.8022, "lon": -79.5344},
+    {"id": "babahoyo", "nombre": "Babahoyo", "provincia": "Los Ríos", "region": "Litoral", "lat": -1.8022, "lon": -79.5344, "capital": true},
     {"id": "quevedo", "nombre": "Quevedo", "provincia": "Los Ríos", "region": "Litoral", "lat": -1.0286, "lon": -79.4635},
     {"id": "vinces", "nombre": "Vinces", "provincia": "Los Ríos", "region": "Litoral", "lat": -1.5555, "lon": -79.7519},
-
-    {"id": "machala", "nombre": "Machala", "provincia": "El Oro", "region": "Litoral", "lat": -3.2581, "lon": -79.9554},
+    {"id": "machala", "nombre": "Machala", "provincia": "El Oro", "region": "Litoral", "lat": -3.2581, "lon": -79.9554, "capital": true},
     {"id": "santa-rosa", "nombre": "Santa Rosa", "provincia": "El Oro", "region": "Litoral", "lat": -3.4488, "lon": -79.9597},
     {"id": "zaruma", "nombre": "Zaruma", "provincia": "El Oro", "region": "Interandina", "lat": -3.6913, "lon": -79.6114},
-
-    {"id": "santo-domingo", "nombre": "Santo Domingo", "provincia": "Santo Domingo de los Tsáchilas", "region": "Litoral", "lat": -0.253, "lon": -79.1754},
+    {"id": "santo-domingo", "nombre": "Santo Domingo", "provincia": "Santo Domingo de los Tsáchilas", "region": "Litoral", "lat": -0.253, "lon": -79.1754, "capital": true},
     {"id": "la-concordia", "nombre": "La Concordia", "provincia": "Santo Domingo de los Tsáchilas", "region": "Litoral", "lat": 0.0072, "lon": -79.3958},
-
     {"id": "puerto-ayora", "nombre": "Puerto Ayora", "provincia": "Galápagos", "region": "Insular", "lat": -0.7432, "lon": -90.3135},
-    {"id": "puerto-baquerizo", "nombre": "Puerto Baquerizo Moreno", "provincia": "Galápagos", "region": "Insular", "lat": -0.9017, "lon": -89.6103},
-
-    {"id": "tulcan", "nombre": "Tulcán", "provincia": "Carchi", "region": "Interandina", "lat": 0.8117, "lon": -77.7178},
+    {"id": "puerto-baquerizo", "nombre": "Puerto Baquerizo Moreno", "provincia": "Galápagos", "region": "Insular", "lat": -0.9017, "lon": -89.6103, "capital": true},
+    {"id": "tulcan", "nombre": "Tulcán", "provincia": "Carchi", "region": "Interandina", "lat": 0.8117, "lon": -77.7178, "capital": true},
     {"id": "san-gabriel", "nombre": "San Gabriel", "provincia": "Carchi", "region": "Interandina", "lat": 0.5966, "lon": -77.832},
-
-    {"id": "ibarra", "nombre": "Ibarra", "provincia": "Imbabura", "region": "Interandina", "lat": 0.3517, "lon": -78.1223},
+    {"id": "ibarra", "nombre": "Ibarra", "provincia": "Imbabura", "region": "Interandina", "lat": 0.3517, "lon": -78.1223, "capital": true},
     {"id": "otavalo", "nombre": "Otavalo", "provincia": "Imbabura", "region": "Interandina", "lat": 0.2343, "lon": -78.2625},
-
-    {"id": "quito", "nombre": "Quito", "provincia": "Pichincha", "region": "Interandina", "lat": -0.2201, "lon": -78.5123},
+    {"id": "quito", "nombre": "Quito", "provincia": "Pichincha", "region": "Interandina", "lat": -0.2201, "lon": -78.5123, "capital": true},
     {"id": "cayambe", "nombre": "Cayambe", "provincia": "Pichincha", "region": "Interandina", "lat": 0.042, "lon": -78.1442},
     {"id": "machachi", "nombre": "Machachi", "provincia": "Pichincha", "region": "Interandina", "lat": -0.5106, "lon": -78.567},
     {"id": "pvm", "nombre": "Pedro Vicente Maldonado", "provincia": "Pichincha", "region": "Litoral", "lat": 0.0858, "lon": -79.0517},
-
-    {"id": "latacunga", "nombre": "Latacunga", "provincia": "Cotopaxi", "region": "Interandina", "lat": -0.9352, "lon": -78.6155},
+    {"id": "latacunga", "nombre": "Latacunga", "provincia": "Cotopaxi", "region": "Interandina", "lat": -0.9352, "lon": -78.6155, "capital": true},
     {"id": "salcedo", "nombre": "Salcedo", "provincia": "Cotopaxi", "region": "Interandina", "lat": -1.045, "lon": -78.59},
     {"id": "la-mana", "nombre": "La Maná", "provincia": "Cotopaxi", "region": "Litoral", "lat": -0.9431, "lon": -79.2229},
-
-    {"id": "ambato", "nombre": "Ambato", "provincia": "Tungurahua", "region": "Interandina", "lat": -1.2491, "lon": -78.6168},
+    {"id": "ambato", "nombre": "Ambato", "provincia": "Tungurahua", "region": "Interandina", "lat": -1.2491, "lon": -78.6168, "capital": true},
     {"id": "pelileo", "nombre": "Pelileo", "provincia": "Tungurahua", "region": "Interandina", "lat": -1.33, "lon": -78.543},
     {"id": "banos", "nombre": "Baños", "provincia": "Tungurahua", "region": "Interandina", "lat": -1.3964, "lon": -78.4247, "nota_region": "Estribación oriental; se usa Interandina (umbrales más bajos, más prudente) hasta decidir"},
-
-    {"id": "riobamba", "nombre": "Riobamba", "provincia": "Chimborazo", "region": "Interandina", "lat": -1.6635, "lon": -78.6546},
+    {"id": "riobamba", "nombre": "Riobamba", "provincia": "Chimborazo", "region": "Interandina", "lat": -1.6635, "lon": -78.6546, "capital": true},
     {"id": "guamote", "nombre": "Guamote", "provincia": "Chimborazo", "region": "Interandina", "lat": -1.9333, "lon": -78.7167},
     {"id": "alausi", "nombre": "Alausí", "provincia": "Chimborazo", "region": "Interandina", "lat": -2.201, "lon": -78.847},
-
-    {"id": "guaranda", "nombre": "Guaranda", "provincia": "Bolívar", "region": "Interandina", "lat": -1.5926, "lon": -79.001},
+    {"id": "guaranda", "nombre": "Guaranda", "provincia": "Bolívar", "region": "Interandina", "lat": -1.5926, "lon": -79.001, "capital": true},
     {"id": "echeandia", "nombre": "Echeandía", "provincia": "Bolívar", "region": "Litoral", "lat": -1.4314, "lon": -79.2806},
-
-    {"id": "azogues", "nombre": "Azogues", "provincia": "Cañar", "region": "Interandina", "lat": -2.7397, "lon": -78.8486},
+    {"id": "azogues", "nombre": "Azogues", "provincia": "Cañar", "region": "Interandina", "lat": -2.7397, "lon": -78.8486, "capital": true},
     {"id": "la-troncal", "nombre": "La Troncal", "provincia": "Cañar", "region": "Litoral", "lat": -2.4234, "lon": -79.3392},
-
-    {"id": "cuenca", "nombre": "Cuenca", "provincia": "Azuay", "region": "Interandina", "lat": -2.9001, "lon": -79.0059},
+    {"id": "cuenca", "nombre": "Cuenca", "provincia": "Azuay", "region": "Interandina", "lat": -2.9001, "lon": -79.0059, "capital": true},
     {"id": "gualaceo", "nombre": "Gualaceo", "provincia": "Azuay", "region": "Interandina", "lat": -2.892, "lon": -78.777},
     {"id": "santa-isabel", "nombre": "Santa Isabel", "provincia": "Azuay", "region": "Interandina", "lat": -3.2726, "lon": -79.3127},
-
-    {"id": "loja", "nombre": "Loja", "provincia": "Loja", "region": "Interandina", "lat": -3.9931, "lon": -79.2042},
+    {"id": "loja", "nombre": "Loja", "provincia": "Loja", "region": "Interandina", "lat": -3.9931, "lon": -79.2042, "capital": true},
     {"id": "catamayo", "nombre": "Catamayo", "provincia": "Loja", "region": "Interandina", "lat": -3.986, "lon": -79.358},
     {"id": "macara", "nombre": "Macará", "provincia": "Loja", "region": "Interandina", "lat": -4.381, "lon": -79.944},
-
-    {"id": "nueva-loja", "nombre": "Nueva Loja", "provincia": "Sucumbíos", "region": "Amazonia", "lat": 0.0847, "lon": -76.8828},
+    {"id": "nueva-loja", "nombre": "Nueva Loja", "provincia": "Sucumbíos", "region": "Amazonia", "lat": 0.0847, "lon": -76.8828, "capital": true},
     {"id": "shushufindi", "nombre": "Shushufindi", "provincia": "Sucumbíos", "region": "Amazonia", "lat": -0.1861, "lon": -76.6481},
-
-    {"id": "tena", "nombre": "Tena", "provincia": "Napo", "region": "Amazonia", "lat": -0.9938, "lon": -77.8129},
+    {"id": "tena", "nombre": "Tena", "provincia": "Napo", "region": "Amazonia", "lat": -0.9938, "lon": -77.8129, "capital": true},
     {"id": "baeza", "nombre": "Baeza", "provincia": "Napo", "region": "Amazonia", "lat": -0.458, "lon": -77.887},
-
-    {"id": "coca", "nombre": "Francisco de Orellana (Coca)", "provincia": "Orellana", "region": "Amazonia", "lat": -0.4625, "lon": -76.9872},
+    {"id": "coca", "nombre": "Francisco de Orellana (Coca)", "provincia": "Orellana", "region": "Amazonia", "lat": -0.4625, "lon": -76.9872, "capital": true},
     {"id": "loreto", "nombre": "Loreto", "provincia": "Orellana", "region": "Amazonia", "lat": -0.687, "lon": -77.306},
-
-    {"id": "puyo", "nombre": "Puyo", "provincia": "Pastaza", "region": "Amazonia", "lat": -1.4924, "lon": -78.0024},
+    {"id": "puyo", "nombre": "Puyo", "provincia": "Pastaza", "region": "Amazonia", "lat": -1.4924, "lon": -78.0024, "capital": true},
     {"id": "mera", "nombre": "Mera", "provincia": "Pastaza", "region": "Amazonia", "lat": -1.458, "lon": -78.113},
-
-    {"id": "macas", "nombre": "Macas", "provincia": "Morona Santiago", "region": "Amazonia", "lat": -2.3087, "lon": -78.1114},
+    {"id": "macas", "nombre": "Macas", "provincia": "Morona Santiago", "region": "Amazonia", "lat": -2.3087, "lon": -78.1114, "capital": true},
     {"id": "sucua", "nombre": "Sucúa", "provincia": "Morona Santiago", "region": "Amazonia", "lat": -2.459, "lon": -78.168},
     {"id": "gualaquiza", "nombre": "Gualaquiza", "provincia": "Morona Santiago", "region": "Amazonia", "lat": -3.403, "lon": -78.576},
-
-    {"id": "zamora", "nombre": "Zamora", "provincia": "Zamora Chinchipe", "region": "Amazonia", "lat": -4.0692, "lon": -78.9567},
+    {"id": "zamora", "nombre": "Zamora", "provincia": "Zamora Chinchipe", "region": "Amazonia", "lat": -4.0692, "lon": -78.9567, "capital": true},
     {"id": "yantzaza", "nombre": "Yantzaza", "provincia": "Zamora Chinchipe", "region": "Amazonia", "lat": -3.828, "lon": -78.759},
     {"id": "zumba", "nombre": "Zumba", "provincia": "Zamora Chinchipe", "region": "Amazonia", "lat": -4.867, "lon": -79.134}
   ],
@@ -96,13 +73,34 @@
       "nombre": "Quito → Baños",
       "nota": "Tiempos aproximados por la E35 sin tráfico; se reemplazan por OpenRouteService cuando haya clave.",
       "tramos": [
-        {"punto": "quito", "min": 0},
-        {"punto": "machachi", "min": 45},
-        {"punto": "latacunga", "min": 90},
-        {"punto": "salcedo", "min": 110},
-        {"punto": "ambato", "min": 145},
-        {"punto": "pelileo", "min": 170},
-        {"punto": "banos", "min": 195}
+        {
+          "punto": "quito",
+          "min": 0
+        },
+        {
+          "punto": "machachi",
+          "min": 45
+        },
+        {
+          "punto": "latacunga",
+          "min": 90
+        },
+        {
+          "punto": "salcedo",
+          "min": 110
+        },
+        {
+          "punto": "ambato",
+          "min": 145
+        },
+        {
+          "punto": "pelileo",
+          "min": 170
+        },
+        {
+          "punto": "banos",
+          "min": 195
+        }
       ]
     }
   ]

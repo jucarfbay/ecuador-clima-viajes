@@ -1,8 +1,8 @@
 """Cálculo de probabilidades, niveles de alerta y confianza a partir de los miembros del ensamble.
 
 Convenciones:
-- Open-Meteo entrega `precipitation` como suma de la hora anterior, en hora local (America/Guayaquil).
-  La lluvia de la hora que termina en T se asigna a la fecha de T - 1 h.
+- Open-Meteo entrega `precipitation` como suma de la hora anterior, en la hora local del punto
+  (America/Guayaquil, UTC-5; Galápagos, UTC-6). La lluvia de la hora que termina en T se asigna a la fecha de T - 1 h.
 - Los niveles usan umbrales del INAMHI y cortes de probabilidad NO calibrados (ver config/umbrales.json).
 """
 from __future__ import annotations
@@ -25,9 +25,11 @@ def _t(s: str) -> datetime:
     return datetime.fromisoformat(s)
 
 
-def local(ahora: datetime) -> datetime:
-    """Hora local de Ecuador sin zona (igual que los tiempos de Open-Meteo con timezone=America/Guayaquil)."""
-    return ahora.astimezone(ECU).replace(tzinfo=None) if ahora.tzinfo else ahora
+def local(ahora: datetime, offset_s: int = -18000) -> datetime:
+    """Hora local sin zona del punto (como los tiempos de Open-Meteo con su zona horaria); por defecto UTC-5."""
+    if not ahora.tzinfo:
+        return ahora
+    return ahora.astimezone(timezone(timedelta(seconds=offset_s))).replace(tzinfo=None)
 
 
 def _validos(xs):
@@ -52,9 +54,10 @@ def percentil(xs, q: float) -> float | None:
     return v[lo] + (v[hi] - v[lo]) * (pos - lo)
 
 
-def acumulados_diarios(tiempos: list[str], miembros: list[list[float]], ahora: datetime, max_dias: int = 10):
+def acumulados_diarios(tiempos: list[str], miembros: list[list[float]], ahora: datetime, max_dias: int = 10,
+                       offset_s: int = -18000):
     """Totales diarios por miembro. El día de hoy cuenta solo las horas que faltan (marcado `parcial`)."""
-    ahora = local(ahora)
+    ahora = local(ahora, offset_s)
     hora_actual = ahora.replace(minute=0, second=0, microsecond=0)
     por_fecha: dict[str, list[int]] = {}
     for i, ts in enumerate(tiempos):
@@ -107,9 +110,12 @@ def confianza(dia_indice: int, dispersion: float | None) -> str:
     return escala[nivel]
 
 
-def bloques_3h(tiempos, miembros, ahora: datetime, horas: int = 72, umbrales: dict | None = None):
-    """Bloques locales de 3 h (00-03, 03-06, ...) desde el bloque en curso, con probabilidades por clase."""
-    ahora = local(ahora)
+def bloques_3h(tiempos, miembros, ahora: datetime, horas: int = 84, umbrales: dict | None = None,
+               offset_s: int = -18000):
+    """Bloques locales de 3 h (00-03, 03-06, ...) desde el bloque en curso, con probabilidades por clase.
+
+    Se calculan 84 h para que, aunque el pronóstico se reutilice hasta 6 h, la web siempre tenga 72 h por delante."""
+    ahora = local(ahora, offset_s)
     umbrales = umbrales or {"ligera_mm": 0.5, "moderada_mm": 7.5, "fuerte_mm": 22.8}
     hora_actual = ahora.replace(minute=0, second=0, microsecond=0)
     inicio_bloque = hora_actual.replace(hour=(hora_actual.hour // 3) * 3)
@@ -147,9 +153,12 @@ def clase_bloque(bl: dict) -> int:
     return 0
 
 
-def serie_horaria(tiempos, miembros, ahora: datetime, horas: int = 72):
-    """Miembros hora a hora desde la próxima hora, en décimas de mm (enteros) para el planificador de viajes."""
-    ahora = local(ahora)
+def serie_horaria(tiempos, miembros, ahora: datetime, horas: int = 84, offset_s: int = -18000):
+    """Miembros hora a hora desde la próxima hora, en décimas de mm (enteros), para el planificador de viajes.
+
+    El ensamble IFS es nativo cada 3 h; Open-Meteo interpola a 1 h. La web lo usa solo para ubicar el paso
+    por cada tramo, no para afirmar a qué hora exacta llueve."""
+    ahora = local(ahora, offset_s)
     proxima = ahora.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     sel = [i for i, ts in enumerate(tiempos) if proxima <= _t(ts) < proxima + timedelta(hours=horas)]
     return {

@@ -24,6 +24,8 @@ from .fuentes import MODELOS, Http, alta_resolucion_rejilla, ensamble, estacione
 
 ECU = timezone(timedelta(hours=-5))
 RAIZ = Path(__file__).resolve().parent.parent
+FORMATO = 2  # versión del pronostico.json que entiende la web; un previo con otro formato no se reutiliza
+VIGENCIA_ESTACION_H = 3  # una estación con datos más viejos no se usa para colorear ni sumar "ahora"
 
 
 def cargar_json(ruta: Path):
@@ -49,7 +51,6 @@ def escribir(ruta: Path, datos):
 
 def pronostico(http: Http, cfg: dict, umbrales: dict, ahora: datetime):
     puntos = cfg["puntos"]
-    por_id = {p["id"]: p for p in puntos}
     datos = {}
     estado_modelos = {}
     for modelo in MODELOS:
@@ -67,8 +68,9 @@ def pronostico(http: Http, cfg: dict, umbrales: dict, ahora: datetime):
     archivo_puntos = {}
     for p in puntos:
         reg = umbrales["regiones"][p["region"]]
+        off = datos["ecmwf_ifs025"][p["id"]]["utc_offset_s"]
         dias_por_modelo = {
-            m: calculo.acumulados_diarios(d[p["id"]]["tiempos"], d[p["id"]]["miembros"], ahora)
+            m: calculo.acumulados_diarios(d[p["id"]]["tiempos"], d[p["id"]]["miembros"], ahora, offset_s=off)
             for m, d in datos.items() if p["id"] in d
         }
         base = dias_por_modelo["ecmwf_ifs025"]
@@ -101,10 +103,15 @@ def pronostico(http: Http, cfg: dict, umbrales: dict, ahora: datetime):
                     "p90": calculo._r(calculo.percentil(dia["totales"], 0.9), 1),
                 },
             })
+        ifs_p = datos["ecmwf_ifs025"][p["id"]]
+        bloques = calculo.bloques_3h(ifs_p["tiempos"], ifs_p["miembros"], ahora, 84, umbrales["bloques_3h"], offset_s=off)
+        for bl in bloques:
+            bl["clase"] = calculo.clase_bloque(bl)
         salida_puntos.append({
             "id": p["id"], "nombre": p["nombre"], "provincia": p["provincia"], "region": p["region"],
-            "lat": p["lat"], "lon": p["lon"], "elevacion_modelo": datos["ecmwf_ifs025"][p["id"]]["elevacion"],
-            "dias": dias,
+            "capital": bool(p.get("capital")), "lat": p["lat"], "lon": p["lon"], "utc_offset_s": off,
+            "elevacion_modelo": ifs_p["elevacion"],
+            "dias": dias, "bloques": bloques,
         })
         archivo_puntos[p["id"]] = {
             m: [{"fecha": x["fecha"], "parcial": x["parcial"],
@@ -112,21 +119,15 @@ def pronostico(http: Http, cfg: dict, umbrales: dict, ahora: datetime):
             for m, dl in dias_por_modelo.items()
         }
 
-    # Lugares guardados y puntos de rutas: bloques de 3 h y miembros hora a hora (ECMWF IFS ENS).
-    ids_detalle = set(cfg.get("lugares", []))
+    # Puntos de rutas: miembros hora a hora (ECMWF IFS ENS) para el planificador de viajes.
+    ids_ruta = set()
     for ruta in cfg.get("rutas", []):
-        ids_detalle.update(t["punto"] for t in ruta["tramos"])
+        ids_ruta.update(t["punto"] for t in ruta["tramos"])
     ifs = datos["ecmwf_ifs025"]
-    detalle = {}
-    for pid in sorted(ids_detalle):
+    horaria = {}
+    for pid in sorted(ids_ruta):
         d = ifs[pid]
-        detalle[pid] = {
-            "nombre": por_id[pid]["nombre"],
-            "bloques": calculo.bloques_3h(d["tiempos"], d["miembros"], ahora, 72, umbrales["bloques_3h"]),
-            "horaria": calculo.serie_horaria(d["tiempos"], d["miembros"], ahora, 72),
-        }
-    for bl in (b for v in detalle.values() for b in v["bloques"]):
-        bl["clase"] = calculo.clase_bloque(bl)
+        horaria[pid] = calculo.serie_horaria(d["tiempos"], d["miembros"], ahora, 84, offset_s=d["utc_offset_s"])
 
     # Semáforo provincial: peor punto + fracción de puntos afectados.
     provincias = {}
@@ -150,6 +151,7 @@ def pronostico(http: Http, cfg: dict, umbrales: dict, ahora: datetime):
         sem.append({"provincia": prov, "puntos": [x["id"] for x in pts], "dias": dias})
 
     return {
+        "formato": FORMATO,
         "generado": ahora.isoformat(timespec="minutes"),
         "estado": umbrales["estado"],
         "umbrales_version": umbrales["version"],
@@ -161,7 +163,7 @@ def pronostico(http: Http, cfg: dict, umbrales: dict, ahora: datetime):
         "lugares": cfg.get("lugares", []),
         "provincias": sem,
         "puntos": salida_puntos,
-        "detalle": detalle,
+        "horaria": horaria,
     }, archivo_puntos
 
 
@@ -195,6 +197,25 @@ def mapa_calor(http: Http, ahora: datetime):
 
 # ---------------------------------------------------------------- estaciones
 
+def _utc(f: str) -> datetime:
+    return datetime.fromisoformat(f.replace("Z", "+00:00"))
+
+
+def sumas_estacion(serie: list, ahora: datetime) -> dict:
+    """Lluvia de las últimas 1/3/24/72 h contadas desde AHORA (no desde el último dato de la estación).
+
+    `mm_1h` es la última hora reportada, solo si llegó hace 2 h o menos (el visor tarda ~1 h); si la estación
+    lleva más tiempo sin reportar queda en None en lugar de mostrar una lluvia vieja como actual."""
+    def suma(h):
+        limite = ahora - timedelta(hours=h)
+        vals = [v for f, v in serie if _utc(f) > limite and v is not None]
+        return round(sum(vals), 1) if vals else None
+    ultima = None
+    if serie and serie[-1][1] is not None and ahora - _utc(serie[-1][0]) <= timedelta(hours=2):
+        ultima = round(serie[-1][1], 1)
+    return {"mm_1h": ultima, "mm_3h": suma(3), "mm_24h": suma(24), "mm_72h": suma(72)}
+
+
 def observado(http: Http, previo: dict | None, ahora: datetime):
     meta = {}
     if previo:
@@ -204,26 +225,66 @@ def observado(http: Http, previo: dict | None, ahora: datetime):
     salida = []
     for e in lista:
         serie = sorted(e["serie"])
-        ultimo = datetime.fromisoformat(serie[-1][0].replace("Z", "+00:00"))
-        def suma(h):
-            limite = ultimo - timedelta(hours=h)
-            return round(sum(v for f, v in serie if datetime.fromisoformat(f.replace("Z", "+00:00")) > limite), 1)
+        ultimo = _utc(serie[-1][0])
+        retraso = round((ahora - ultimo).total_seconds() / 3600, 1)
         salida.append({
             "id": e["id"], "codigo": e["codigo"], "nombre": e["nombre"], "provincia": e.get("provincia"),
             "propietario": e["propietario"], "lat": e["lat"], "lon": e["lon"], "altitud": e["altitud"],
             "frecuencia": e["frecuencia"], "tablas": e["tablas"],
             "ultimo": ultimo.astimezone(ECU).isoformat(timespec="minutes"),
-            "retraso_h": round((ahora - ultimo).total_seconds() / 3600, 1),
-            "mm_1h": suma(1), "mm_3h": suma(3), "mm_24h": suma(24), "mm_72h": suma(72),
-            "ultimas_24h": [[datetime.fromisoformat(f.replace("Z", "+00:00")).astimezone(ECU).isoformat(timespec="minutes"), v]
-                            for f, v in serie[-24:]],
+            "retraso_h": retraso,
+            "vigente": retraso <= VIGENCIA_ESTACION_H,
+            **sumas_estacion(serie, ahora),
+            "ultimas_24h": [[_utc(f).astimezone(ECU).isoformat(timespec="minutes"), v] for f, v in serie[-24:]],
         })
     return {
         "generado": ahora.isoformat(timespec="minutes"),
         "fuente": "Visor de estaciones del INAMHI (servicio público sin documentar; puede cambiar sin aviso)",
-        "nota": "Valor horario = lluvia acumulada en la hora que termina en la fecha indicada (supuesto, por confirmar con el INAMHI).",
+        "nota": ("Valor horario = lluvia acumulada en la hora que termina en la fecha indicada (supuesto, por confirmar "
+                 f"con el INAMHI). Sumas contadas desde la hora de generación; 'vigente' = último dato de hace {VIGENCIA_ESTACION_H} h o menos."),
+        "vigencia_h": VIGENCIA_ESTACION_H,
         "estaciones": salida,
     }, lista
+
+
+# ---------------------------------------------------------------- previo y archivo
+
+def leer_gz(ruta: Path):
+    try:
+        with gzip.open(ruta, "rt", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def previo_archivado(carpeta: str | None, prefijo: str):
+    """Último pronostico_*/calor_*.json.gz descargado de la versión mensual (respaldo si el sitio no responde)."""
+    if not carpeta or not Path(carpeta).is_dir():
+        return None
+    for ruta in sorted(Path(carpeta).glob(f"{prefijo}_*.json.gz"), reverse=True):
+        d = leer_gz(ruta)
+        if not d:
+            continue
+        if prefijo == "pronostico":
+            d = d.get("pronostico")  # archivos viejos no traían el pronóstico completo
+        if d and d.get("generado"):
+            return d
+    return None
+
+
+def mas_reciente(*cands):
+    cands = [c for c in cands if c and c.get("generado")]
+    return max(cands, key=lambda c: datetime.fromisoformat(c["generado"])) if cands else None
+
+
+def edad_h(d: dict, ahora: datetime) -> float:
+    return (ahora - datetime.fromisoformat(d["generado"])).total_seconds() / 3600
+
+
+def guardar_gz(ruta: Path, datos):
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(ruta, "wt", encoding="utf-8") as f:
+        json.dump(datos, f, ensure_ascii=False, separators=(",", ":"))
 
 
 # ---------------------------------------------------------------- principal
@@ -232,6 +293,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--salida", default="site/data")
     ap.add_argument("--previo", default=os.environ.get("SITIO_PREVIO"))
+    ap.add_argument("--previo-archivo", default="previo", help="carpeta con el último pronóstico/calor archivado")
     ap.add_argument("--archivo", default="archivo")
     ap.add_argument("--vigencia-h", type=float, default=5.5)
     ap.add_argument("--forzar-pronostico", action="store_true")
@@ -244,17 +306,15 @@ def main(argv=None):
     http = Http(pausa_s=0.3)
     estado = {"generado": ahora.isoformat(timespec="minutes"), "fuentes": {}}
 
-    # Pronóstico (cada ~6 h) y mapa de calor.
-    prev_pron = leer_previo(a.previo, "pronostico.json")
-    prev_calor = leer_previo(a.previo, "calor.json")
-    vigente = False
-    if prev_pron and not a.forzar_pronostico:
-        edad_h = (ahora - datetime.fromisoformat(prev_pron["generado"])).total_seconds() / 3600
-        vigente = edad_h < a.vigencia_h
+    # Pronóstico (cada ~6 h) y mapa de calor. El previo sale del sitio publicado o, si no responde, del archivo.
+    def previo_valido(d):
+        return d if d and d.get("formato") == FORMATO else None
+    prev_pron = mas_reciente(previo_valido(leer_previo(a.previo, "pronostico.json")),
+                             previo_valido(previo_archivado(a.previo_archivo, "pronostico")))
+    prev_calor = mas_reciente(leer_previo(a.previo, "calor.json"), previo_archivado(a.previo_archivo, "calor"))
+    vigente = bool(prev_pron) and not a.forzar_pronostico and edad_h(prev_pron, ahora) < a.vigencia_h
     if vigente:
         escribir(salida / "pronostico.json", prev_pron)
-        if prev_calor:
-            escribir(salida / "calor.json", prev_calor)
         estado["fuentes"]["pronostico"] = {"generado": prev_pron["generado"], "accion": "reutilizado"}
     else:
         try:
@@ -262,31 +322,36 @@ def main(argv=None):
             escribir(salida / "pronostico.json", pron)
             estado["fuentes"]["pronostico"] = {"generado": pron["generado"], "accion": "recalculado",
                                                "modelos": {m: v["estado"] for m, v in pron["modelos"].items()}}
-            archivo.mkdir(parents=True, exist_ok=True)
-            with gzip.open(archivo / f"pronostico_{ahora:%Y%m%dT%H%M}.json.gz", "wt", encoding="utf-8") as f:
-                json.dump({"generado": pron["generado"], "puntos": arch, "detalle": pron["detalle"]}, f)
+            guardar_gz(archivo / f"pronostico_{ahora:%Y%m%dT%H%M}.json.gz",
+                       {"generado": pron["generado"], "puntos": arch, "pronostico": pron})
         except Exception as e:  # noqa: BLE001
             estado["fuentes"]["pronostico"] = {"error": str(e)[:300]}
             if prev_pron:
                 escribir(salida / "pronostico.json", prev_pron)
+    calor_vigente = bool(prev_calor) and vigente and edad_h(prev_calor, ahora) < a.vigencia_h
+    if calor_vigente:
+        escribir(salida / "calor.json", prev_calor)
+        estado["fuentes"]["calor"] = {"generado": prev_calor["generado"], "accion": "reutilizado"}
+    else:
         try:
             calor = mapa_calor(http, ahora)
             escribir(salida / "calor.json", calor)
             estado["fuentes"]["calor"] = {"generado": calor["generado"], "accion": "recalculado"}
+            guardar_gz(archivo / f"calor_{ahora:%Y%m%dT%H%M}.json.gz", calor)
         except Exception as e:  # noqa: BLE001
             estado["fuentes"]["calor"] = {"error": str(e)[:300]}
             if prev_calor:
                 escribir(salida / "calor.json", prev_calor)
 
-    # Estaciones (cada hora).
+    # Estaciones (cada ejecución).
     prev_obs = leer_previo(a.previo, "estaciones.json")
     try:
         obs, crudo = observado(http, prev_obs, ahora)
         escribir(salida / "estaciones.json", obs)
-        estado["fuentes"]["estaciones"] = {"generado": obs["generado"], "n": len(obs["estaciones"])}
-        archivo.mkdir(parents=True, exist_ok=True)
-        with gzip.open(archivo / f"estaciones_{ahora:%Y%m%dT%H%M}.json.gz", "wt", encoding="utf-8") as f:
-            json.dump([{"id": e["id"], "codigo": e["codigo"], "serie": e["serie"]} for e in crudo], f)
+        estado["fuentes"]["estaciones"] = {"generado": obs["generado"], "n": len(obs["estaciones"]),
+                                           "vigentes": sum(1 for e in obs["estaciones"] if e["vigente"])}
+        guardar_gz(archivo / f"estaciones_{ahora:%Y%m%dT%H%M}.json.gz",
+                   [{"id": e["id"], "codigo": e["codigo"], "serie": e["serie"]} for e in crudo])
     except Exception as e:  # noqa: BLE001
         estado["fuentes"]["estaciones"] = {"error": str(e)[:300]}
         if prev_obs:

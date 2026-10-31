@@ -23,14 +23,14 @@ def tiempos_locales(dias):
     return [(t0 + timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M") for h in range(24 * dias)]
 
 
-def respuesta_ensamble(n_puntos, n_miembros, dias, mm_por_hora):
+def respuesta_ensamble(n_puntos, n_miembros, dias, mm_por_hora, offset_s=-18000):
     t = tiempos_locales(dias)
     out = []
     for _ in range(n_puntos):
         hourly = {"time": t, "precipitation": [mm_por_hora(0, i) for i in range(len(t))]}
         for m in range(1, n_miembros):
             hourly[f"precipitation_member{m:02d}"] = [mm_por_hora(m, i) for i in range(len(t))]
-        out.append({"latitude": 0, "longitude": 0, "elevation": 2000.0, "hourly": hourly})
+        out.append({"latitude": 0, "longitude": 0, "elevation": 2000.0, "utc_offset_seconds": offset_s, "hourly": hourly})
     return out
 
 
@@ -45,7 +45,8 @@ class HttpFalso:
         if url == ENSEMBLE_URL:
             n = len(params["latitude"].split(","))
             miembros = {"ecmwf_ifs025": 51, "ecmwf_aifs025_ensemble": 51, "ncep_gefs025": 31}[params["models"]]
-            return respuesta_ensamble(n, miembros, params["forecast_days"], self.mm)
+            off = -21600 if params["timezone"] == "Pacific/Galapagos" else -18000
+            return respuesta_ensamble(n, miembros, params["forecast_days"], self.mm, off)
         if url == FORECAST_URL:
             n = len(params["latitude"].split(","))
             t = tiempos_locales(params["forecast_days"])
@@ -139,9 +140,20 @@ class TestPipeline(unittest.TestCase):
         self.assertAlmostEqual(d1["p_alto_por_modelo"]["ecmwf_ifs025"], round(41 / 51, 2))
         self.assertIn(d1["nivel"], (2, 3))
         self.assertEqual(len(pron["provincias"]), 24)
-        self.assertIn("banos", pron["detalle"])
-        self.assertEqual(len(pron["detalle"]["banos"]["horaria"]["tiempos"]), 72)
-        self.assertEqual(len(pron["detalle"]["banos"]["horaria"]["miembros_dmm"]), 51)
+        self.assertEqual(pron["formato"], run.FORMATO)
+        self.assertEqual(sum(1 for p in pron["puntos"] if p["capital"]), 24)
+        # Bloques de 3 h para TODOS los puntos, 84 h desde el bloque en curso.
+        self.assertTrue(all(len(p["bloques"]) >= 28 for p in pron["puntos"]))
+        self.assertEqual(quito["bloques"][0]["inicio"], "2026-10-29T18:00")
+        # Galápagos (UTC-6): a las 20:30 de Quito son las 19:30 allá -> el bloque en curso es 18:00 igual,
+        # pero su día y hora local salen de su propia zona.
+        gal = next(p for p in pron["puntos"] if p["id"] == "puerto-ayora")
+        self.assertEqual(gal["utc_offset_s"], -21600)
+        # Serie hora a hora solo para puntos de rutas.
+        self.assertIn("banos", pron["horaria"])
+        self.assertNotIn("guayaquil", pron["horaria"])
+        self.assertEqual(len(pron["horaria"]["banos"]["tiempos"]), 84)
+        self.assertEqual(len(pron["horaria"]["banos"]["miembros_dmm"]), 51)
 
     def test_main_completo(self):
         http = HttpFalso(lambda m, i: 0.1)
@@ -155,12 +167,40 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(len(est["estaciones"]), 1)
             e = est["estaciones"][0]
             self.assertEqual(e["nombre"], "TOCTIUCO - EPMAPS QUITO")
-            self.assertEqual(e["mm_24h"], 24.0)
+            # Sumas desde AHORA (20:30): 24 h hacia atrás = 23 lecturas de 1 mm (último dato 19:00).
+            self.assertEqual(e["mm_24h"], 23.0)
+            self.assertEqual(e["mm_1h"], 1.0)
+            self.assertTrue(e["vigente"])
             self.assertEqual(e["ultimo"], "2026-10-29T19:00-05:00")
             calor = json.loads(Path(f"{tmp}/data/calor.json").read_text())
             self.assertEqual(len(calor["tiempos"]), 72)  # 4 días desde las 00:00 -> 72 h completas desde las 21:00
             self.assertEqual(len(calor["valores_dmm"][0]), len(calor["lats"]) * len(calor["lons"]))
             self.assertTrue(list(Path(f"{tmp}/arch").glob("pronostico_*.json.gz")))
+            self.assertTrue(list(Path(f"{tmp}/arch").glob("calor_*.json.gz")))
+
+    def test_freno_con_archivo(self):
+        """Si el sitio no responde pero el archivo tiene un pronóstico de hace 2 h, no se recalcula."""
+        http = HttpFalso(lambda m, i: 0.1)
+        with tempfile.TemporaryDirectory() as tmp:
+            previo = {"formato": run.FORMATO, "generado": (AHORA - timedelta(hours=2)).isoformat(timespec="minutes"),
+                      "puntos": []}
+            run.guardar_gz(Path(f"{tmp}/prev/pronostico_20261029T1830.json.gz"), {"pronostico": previo})
+            run.guardar_gz(Path(f"{tmp}/prev/calor_20261029T1830.json.gz"), {"generado": previo["generado"]})
+            with mock.patch.object(run, "Http", return_value=http), \
+                    mock.patch.object(run, "datetime", wraps=datetime) as dt:
+                dt.now.return_value = AHORA
+                run.main(["--salida", f"{tmp}/data", "--archivo", f"{tmp}/arch", "--previo-archivo", f"{tmp}/prev"])
+            estado = json.loads(Path(f"{tmp}/data/estado.json").read_text())
+            self.assertEqual(estado["fuentes"]["pronostico"]["accion"], "reutilizado")
+            self.assertEqual(estado["fuentes"]["calor"]["accion"], "reutilizado")
+            self.assertFalse(list(Path(f"{tmp}/arch").glob("pronostico_*.json.gz")))
+
+    def test_estacion_atrasada(self):
+        serie = [["2026-10-29T10:00:00+00:00", 5.0], ["2026-10-29T11:00:00+00:00", 2.0]]  # 06:00 hora de Ecuador
+        s = run.sumas_estacion(serie, AHORA)
+        self.assertIsNone(s["mm_1h"])  # 14 h sin datos: no se muestra como lluvia actual
+        self.assertIsNone(s["mm_3h"])
+        self.assertEqual(s["mm_24h"], 7.0)
 
 
 if __name__ == "__main__":

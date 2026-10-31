@@ -8,10 +8,14 @@ Web de uso personal y familiar con el pronóstico probabilístico de lluvia para
 
 ## Qué muestra
 
-- **Viaje:** para una ruta (por ahora Quito → Baños) y una hora de salida, el pronóstico en cada tramo a la hora en que pasarás por él, y si salir unas horas antes o después reduce la lluvia (solo cuando ocurre en al menos 75 % de los escenarios). Incluye la lluvia medida en las estaciones cercanas.
-- **Lugares:** los próximos 3 días en bloques de 3 h y los próximos 10 días por nivel.
-- **Mapa:** fondo satelital Sentinel-2, pronóstico de lluvia por hora (72 h), estaciones del INAMHI, y como capas opcionales las nubes GOES (~40 min de retraso) y la lluvia satelital IMERG (~5-6 h de retraso).
-- **Provincias:** el peor nivel por provincia y día, con cuántos puntos lo alcanzan.
+- **Lugares (inicio):** tus lugares (las 24 capitales, Baños y otras 39 ciudades, más "Mi ubicación"), con una frase de respuesta, el hietograma de las próximas 72 h en bloques de 3 h, la lluvia medida en la estación más cercana y los próximos días. Los favoritos se guardan en el teléfono y en el enlace (`?l=quito,banos`), para compartirlos.
+- **Viaje:** para una ruta (por ahora Quito → Baños), barras por hora de salida con la lluvia esperada en la ruta, la ruta como carretera con la lluvia en cada tramo a la hora de paso, aviso si llegas de noche y otra salida solo si es más seca en al menos 7,5 de cada 10 escenarios.
+- **Mapa:** fondo satelital Sentinel-2, nombres de ciudades, pronóstico de lluvia por hora (72 h, con reproductor), estaciones del INAMHI que registran lluvia, botón Ubicarme y capas opcionales de nubes GOES (~40 min de retraso) y lluvia satelital IMERG (~5-6 h de retraso).
+- **Provincias:** lista de la peor a la mejor para el día elegido, con cuántos puntos alcanzan el nivel; tabla completa como detalle.
+
+**Ubicación:** se usa solo en el teléfono para elegir el punto del sistema más cercano; no se envía a ningún servidor ni se guarda en el enlace.
+
+**Sin conexión:** la página y los últimos datos quedan guardados en el teléfono (service worker) y se muestran con un aviso si no hay red.
 
 ## Fuentes (todas públicas)
 
@@ -28,8 +32,8 @@ El servicio del visor del INAMHI no tiene documentación ni términos publicados
 ## Cómo funciona
 
 ```
-GitHub Actions (cada hora)
-  ├─ pronóstico: solo si el publicado tiene más de 5,5 h (los modelos se actualizan cada 6 h)
+GitHub Actions (cada hora, idealmente disparado desde fuera; ver abajo)
+  ├─ pronóstico y mapa de calor: solo si el publicado (o, si el sitio no responde, el último archivado) tiene más de 5,5 h
   ├─ estaciones del INAMHI: siempre
   ├─ archivo histórico (.json.gz) → versión mensual "archivo-AAAA-MM" (fuera de git)
   └─ publica site/ en GitHub Pages (sin commits de datos)
@@ -50,6 +54,20 @@ El pipeline usa solo la biblioteca estándar de Python. Los datos quedan en `sit
 4. En **Actions**, ejecuta "Datos y publicación" con "Run workflow" (marca *forzar* la primera vez).
 5. La web queda en `https://jucarfbay.github.io/ecuador-clima-viajes/`.
 
+### Disparador externo (recomendado)
+
+GitHub no respeta la frecuencia horaria de los flujos programados: en 19 h corrió solo 3 veces. Para que la lluvia medida llegue cada hora, un servicio gratuito de tareas programadas puede iniciar el flujo:
+
+1. En GitHub: **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**. Repositorio: solo `ecuador-clima-viajes`. Permiso: **Actions: Read and write**. Vencimiento: 1 año.
+2. En [cron-job.org](https://cron-job.org) (gratis), crea una tarea cada hora, en el minuto 10:
+   - URL: `https://api.github.com/repos/jucarfbay/ecuador-clima-viajes/actions/workflows/datos.yml/dispatches`
+   - Método: `POST`
+   - Encabezados: `Authorization: Bearer <tu token>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`
+   - Cuerpo: `{"ref":"main"}`
+3. GitHub responde `204` si la llamada funcionó; la ejecución aparece en **Actions**.
+
+El freno de 5,5 h evita que más ejecuciones gasten cuota de Open-Meteo: el pronóstico se recalcula como máximo unas 4 veces al día.
+
 El flujo "Mantener activo" hace un commit mínimo al mes, porque GitHub desactiva los flujos programados de repositorios públicos tras 60 días sin actividad.
 
 ## Configuración
@@ -62,7 +80,8 @@ Para agregar un lugar o una ruta, edita `config/puntos.json` y haz push: el fluj
 ## Desarrollo
 
 ```bash
-python -m unittest discover -s tests -v      # pruebas sin red
+python -m unittest discover -s tests -v      # pruebas del pipeline, sin red
+node --test tests/logica.test.js             # pruebas de la lógica de la web
 python tools/demo.py site/data               # datos de DEMOSTRACIÓN para revisar la interfaz
 python -m pipeline.run --salida site/data    # datos reales (requiere internet)
 ```
@@ -76,4 +95,4 @@ python -m pipeline.run --salida site/data    # datos reales (requiere internet)
 
 ## Licencias y atribución
 
-Datos de Open-Meteo y ECMWF bajo CC BY 4.0. Sentinel-2 cloudless 2024 by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2024), CC BY-NC-SA 4.0. Imágenes de NASA GIBS/EOSDIS. Estaciones: INAMHI. Calles: © OpenStreetMap. Uso personal, no comercial.
+Datos de Open-Meteo y ECMWF bajo CC BY 4.0. Sentinel-2 cloudless 2024 by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2024), CC BY-NC-SA 4.0. Imágenes de NASA GIBS/EOSDIS. Estaciones: INAMHI. Calles: © OpenStreetMap. Leaflet (BSD-2) y tipografía Overpass (SIL OFL 1.1) incluidas en `site/vendor` y `site/fuentes`. Uso personal, no comercial.
