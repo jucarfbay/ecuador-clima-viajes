@@ -288,12 +288,12 @@ async function iniciar() {
   const arrancar = () => {
     if (arrancado) return;
     arrancado = true;
-    calcularEncuadres();
     capas();
     marcadores();
     estaciones();
     controles();
     elegirSalida(S.k, { mover: false });
+    calcularEncuadres(); // después de pintar la decisión: la banda ya tiene su altura real
     $("#estado-carga").classList.add("listo");
     // En teléfono la atribución compacta arranca abierta y tapa la escena: se cierra (sigue a un toque).
     if (MOVIL) document.querySelectorAll(".maplibregl-ctrl-attrib.maplibregl-compact-show").forEach((el) => el.classList.remove("maplibregl-compact-show"));
@@ -312,8 +312,11 @@ async function iniciar() {
   let pendiente = 0;
   mapa.on("render", () => { const ahora = performance.now(); if (ahora - pendiente > 160) { pendiente = ahora; acomodar(); } });
   mapa.on("moveend", acomodar);
+  // El encuadre se rehace si cambia la pantalla o la altura de la banda (el texto de la decisión varía con la salida).
   let tRedim = 0;
-  mapa.on("resize", () => { clearTimeout(tRedim); tRedim = setTimeout(() => { if (arrancado && !S.recorriendo && !S.mapa.isMoving()) calcularEncuadres(); }, 300); });
+  const reencuadrar = () => { clearTimeout(tRedim); tRedim = setTimeout(() => { if (arrancado && !S.recorriendo && !S.mapa.isMoving()) calcularEncuadres(); }, 300); };
+  mapa.on("resize", reencuadrar);
+  if (window.ResizeObserver) new ResizeObserver(reencuadrar).observe($(".tiempo"));
 }
 
 /** Aviso único y discreto si el fondo o el relieve no cargan: los datos siguen siendo válidos. */
