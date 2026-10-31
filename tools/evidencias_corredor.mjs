@@ -67,6 +67,21 @@ async function colisiones(p) {
   });
 }
 
+/** Distancia (px) entre el punto de cada marca y la proyección de su coordenada: verifica que no haya desplazamientos. */
+async function posicion(p) {
+  return p.evaluate(() => {
+    const m = window.__mapa, errs = [];
+    document.querySelectorAll(".maplibregl-marker .punto").forEach((pt) => {
+      const mk = pt.closest(".maplibregl-marker");
+      const ll = mk.__ll; if (!ll) return;
+      const r = pt.getBoundingClientRect(), q = m.project(ll);
+      const rc = m.getCanvas().getBoundingClientRect();
+      errs.push(Math.hypot(r.left + r.width / 2 - (rc.left + q.x), r.top + r.height / 2 - (rc.top + q.y)));
+    });
+    return errs.length ? { n: errs.length, max: +Math.max(...errs).toFixed(1) } : null;
+  });
+}
+
 async function sesion(nombre, url, ancho, alto, escala, fn, opciones = {}) {
   const ctx = await nav.newContext({
     viewport: { width: ancho, height: alto }, deviceScaleFactor: escala, isMobile: ancho < 640, hasTouch: ancho < 640,
@@ -95,6 +110,10 @@ for (const [version, url] of [["despues", DESPUES], ...(ANTES ? [["antes", ANTES
         await p.waitForTimeout(900); await listo(p, 400);
         const col = await colisiones(p);
         log(`[${version}-${tag}] salida ${String(h).padStart(2, "0")}:00 del ${s.fecha}: ${col.length} colisiones de etiquetas${col.length ? " (" + col.slice(0, 6).join("; ") + ")" : ""}`);
+        if (version === "despues") {
+          log(`[${version}-${tag}] posición de marcas: ${JSON.stringify(await posicion(p))}`);
+          if (tag === "1440") log(`[${version}-${tag}] decisión ${String(h).padStart(2, "0")}:00: ${(await p.evaluate(() => document.querySelector("#decision")?.innerText || "")).replace(/\s+/g, " ")}`);
+        }
         await p.screenshot({ path: `${OUT}/${version}-${tag}-salida-${String(h).padStart(2, "0")}00.png` });
       }
     });
@@ -117,7 +136,10 @@ for (const [tag, ancho, alto, escala] of [["1440", 1440, 900, 1], ["390", 390, 8
 
 // 3. T5: fallo del fondo satelital (se bloquean sus teselas).
 await sesion("fallo-satelite", DESPUES, 1440, 900, 1, async (p) => {
-  await listo(p, 6500);
+  const t0 = Date.now();
+  await p.waitForFunction(() => document.querySelector("#estado-carga")?.classList.contains("listo"), null, { timeout: 60000 });
+  log(`[fallo-satelite] escena visible a los ${((Date.now() - t0) / 1000).toFixed(0)} s sin fondo satelital`);
+  await p.waitForTimeout(6500);
   await salida(p, 19); await camaraFija(p, 1440); await p.waitForTimeout(1500);
   const aviso = await p.evaluate(() => { const a = document.querySelector("#aviso"); return a && !a.hidden ? a.textContent : "sin aviso"; });
   log(`[fallo-satelite] aviso: ${aviso}`);

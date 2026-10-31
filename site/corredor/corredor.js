@@ -245,7 +245,12 @@ async function iniciar() {
     console.warn("mapa", ev?.error?.message || ev);
     if (["satelite", "dem", "sombras"].includes(ev?.sourceId) || /Failed to fetch|AJAXError/.test(ev?.error?.message || "")) avisarFallo();
   });
-  mapa.on("load", () => {
+  // La escena arranca con "load" o, si las teselas del fondo/relieve no llegan, en cuanto el estilo esté listo:
+  // la ruta, las horas y la lluvia no dependen de esas teselas.
+  let arrancado = false;
+  const arrancar = () => {
+    if (arrancado) return;
+    arrancado = true;
     capas();
     marcadores();
     estaciones();
@@ -257,7 +262,12 @@ async function iniciar() {
     if (MOV) dibujarEntrada(); else mapa.jumpTo(VISTAS.general());
     medirFps();
     if (PARAM.has("medir")) medicion();
-  });
+  };
+  mapa.on("load", arrancar);
+  const espera = setInterval(() => {
+    if (arrancado) { clearInterval(espera); return; }
+    if (mapa.isStyleLoaded() && performance.now() > 12000) { clearInterval(espera); avisarFallo(true); arrancar(); }
+  }, 1000);
   mapa.on("dragstart", detener);
   mapa.on("rotatestart", (e) => { if (e.originalEvent) detener(); });
   // Las etiquetas se reacomodan cuando la cámara cambia (y durante el vuelo, con pausa).
@@ -267,9 +277,9 @@ async function iniciar() {
 }
 
 /** Aviso único y discreto si el fondo o el relieve no cargan: los datos siguen siendo válidos. */
-function avisarFallo() {
+function avisarFallo(forzar = false) {
   S.fallos++;
-  if (S.fallos < 3) return; // un mosaico perdido aislado no amerita aviso
+  if (S.fallos < 3 && !forzar) return; // un mosaico perdido aislado no amerita aviso
   const el = $("#aviso");
   if (!el.hidden) return;
   el.hidden = false;
@@ -278,13 +288,13 @@ function avisarFallo() {
 
 function capas() {
   const m = S.mapa, R = S.ruta;
-  // 1. Velo del campo de lluvia: solo en el corredor, tenue, con el borde de cada celda nativa a la vista.
+  // 1. Velo del campo de lluvia: solo en el corredor y tenue. Cada bloque es una celda nativa (~8 km): su borde
+  //    recto ya muestra la resolución real, sin dibujar una rejilla encima.
   m.addSource("lluvia", { type: "geojson", data: S.lluvia._geo });
   m.addLayer({ id: "lluvia", type: "fill", source: "lluvia", filter: ["all", ["get", "cerca"], [">=", ["get", "mm"], 0.1]],
     paint: { "fill-color": pasoColor(), "fill-antialias": false,
       "fill-opacity": ["interpolate", ["linear"], ["get", "mm"], 0.1, 0.07, 1, 0.13, 5, 0.2, 10, 0.24] } });
-  m.addLayer({ id: "lluvia-celdas", type: "line", source: "lluvia", filter: ["all", ["get", "cerca"], [">=", ["get", "mm"], 0.1]],
-    paint: { "line-color": pasoColor(), "line-opacity": 0.35, "line-width": 0.8 } });
+
 
   // 2. La vía y su sombra (tramos de ~0,4 km para marcar lo recorrido).
   S.tramos = [];
@@ -410,6 +420,9 @@ function marcador(html, lngLat, clase, { prioridad = 5, variantes = ["arriba", "
   el.className = `marca ${clase}`;
   el.innerHTML = `<span class="punto" aria-hidden="true"></span><span class="etq">${html}</span>`;
   const mk = new ML.Marker({ element: el, anchor: "center", opacityWhenCovered: "0.75" }).setLngLat(lngLat).addTo(S.mapa);
+  el.__ll = lngLat; // para verificar su posición en las evidencias
+  const fijar = mk.setLngLat.bind(mk);
+  mk.setLngLat = (ll) => { el.__ll = ll; return fijar(ll); };
   S.etiquetas.push({ el, prioridad, variantes, plegable });
   return mk;
 }
@@ -424,7 +437,7 @@ function acomodar() {
   const orden = [...S.etiquetas].sort((a, b) => a.prioridad - b.prioridad);
   for (const e of orden) {
     const etq = e.el.querySelector(".etq");
-    e.el.classList.remove("plegada", ...e.variantes);
+    e.el.classList.remove("plegada", "sin-paso", ...e.variantes);
     if (e.el.hidden || getComputedStyle(etq).display === "none") continue;
     const punto = e.el.getBoundingClientRect();
     if (punto.right < 0 || punto.left > ancho || punto.bottom < 0 || punto.top > alto) continue;
@@ -434,6 +447,16 @@ function acomodar() {
       const r = etq.getBoundingClientRect();
       if (!choca(r) && r.left >= 0 && r.right <= ancho) { puestos.push(r); ok = true; break; }
       e.el.classList.remove(v);
+    }
+    if (!ok && e.el.classList.contains("hito")) {
+      // segundo intento: el nombre solo, sin la hora de paso (la hora sigue en la matriz y en la lectura)
+      e.el.classList.add("sin-paso");
+      for (const v of e.variantes) {
+        e.el.classList.add(v);
+        const r = etq.getBoundingClientRect();
+        if (!choca(r) && r.left >= 0 && r.right <= ancho) { puestos.push(r); ok = true; break; }
+        e.el.classList.remove(v);
+      }
     }
     if (!ok) {
       if (e.plegable) e.el.classList.add("plegada");
@@ -558,8 +581,10 @@ function prepararSalidas() {
   S.k = PARAM.has("salida") ? Math.max(0, S.salidas.findIndex((t) => hhmm(t) === PARAM.get("salida") && t >= ahora)) : k8 >= 0 ? k8 : 0;
   S.exposiciones = S.salidas.map(exposicion);
   // Salida con menos lluvia prevista (media en el camino) entre las que tienen datos completos.
+  // Solo se consideran salidas de día (05:00 a 20:00), como en la web principal: de noche no es una sugerencia útil.
   let mejor = -1;
-  S.exposiciones.forEach((x, k) => { if (x.media != null && (mejor < 0 || x.media < S.exposiciones[mejor].media - 1e-9)) mejor = k; });
+  const deDia = (k) => { const h = local(S.salidas[k]).getUTCHours(); return h >= 5 && h <= 20; };
+  S.exposiciones.forEach((x, k) => { if (deDia(k) && x.media != null && (mejor < 0 || x.media < S.exposiciones[mejor].media - 1e-9)) mejor = k; });
   const max = Math.max(...S.exposiciones.map((x) => x.media ?? 0));
   S.mejor = mejor >= 0 && max - S.exposiciones[mejor].media >= 0.2 ? mejor : -1; // solo si la diferencia es apreciable
   dibujarMatriz();
@@ -641,8 +666,8 @@ function pintarDecision(tVehiculo = null) {
   let comp = "";
   if (S.mejor >= 0 && S.mejor !== S.k) {
     const m = S.exposiciones[S.mejor];
-    comp = `<span class="comp">Menos lluvia prevista: salir a las <b>${hhmm(S.salidas[S.mejor])}</b>${diaTxt(S.salidas[S.mejor]) !== diaTxt(salida) ? ` del ${diaTxt(S.salidas[S.mejor])}` : ""} (lo peor ${num(m.peor.mm)} mm/h)</span>`;
-  } else if (S.mejor === S.k) comp = `<span class="comp es">Es la salida con menos lluvia prevista en estas 72 h</span>`;
+    comp = `<span class="comp">Menos lluvia prevista, saliendo de día: <b>${hhmm(S.salidas[S.mejor])}</b>${diaTxt(S.salidas[S.mejor]) !== diaTxt(salida) ? ` del ${diaTxt(S.salidas[S.mejor])}` : ""} (${m.peor.mm < 0.1 ? "sin lluvia en el camino" : `lo peor ${num(m.peor.mm)} mm/h`})</span>`;
+  } else if (S.mejor === S.k) comp = `<span class="comp es">Es la salida de día con menos lluvia prevista en estas 72 h</span>`;
   else comp = `<span class="comp tenue">Sin diferencias apreciables entre salidas</span>`;
   const ruta = tVehiculo ? `<span class="tenue">en ruta ${hhmm(tVehiculo)}</span>` : "";
   $("#decision").innerHTML = `

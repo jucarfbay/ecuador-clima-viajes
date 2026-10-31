@@ -105,13 +105,15 @@ button { font: inherit; color: inherit; }
 /* ------------------------------------------------------------ marcas sobre el terreno */
 /* Cada marca es un punto en su posición exacta; la etiqueta se coloca arriba, a la derecha o a la izquierda
    (o se pliega) según no choque con otras de mayor prioridad. */
-.marca { position: relative; width: 10px; height: 10px; padding: 0; border: 0; background: none; }
+/* OJO: no fijar `position` aquí; .maplibregl-marker es absoluto y es lo que ancla la marca a su coordenada. */
+.marca { width: 10px; height: 10px; padding: 0; border: 0; background: none; }
 .marca .punto { position: absolute; inset: 0; border-radius: 50%; }
 .marca .etq { position: absolute; white-space: nowrap; pointer-events: none; text-shadow: 0 0 3px #000, 0 1px 10px rgba(0, 0, 0, .9); }
 .marca:not(.der):not(.izq) .etq { left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); text-align: center; }
 .marca.der .etq { left: calc(100% + 8px); top: 50%; transform: translateY(-50%); text-align: left; }
 .marca.izq .etq { right: calc(100% + 8px); top: 50%; transform: translateY(-50%); text-align: right; }
 .marca.plegada .etq { display: none; }
+.hito.sin-paso .paso { display: none; }
 
 .hito { pointer-events: none; }
 .hito .punto { background: #fff; box-shadow: 0 0 0 2px rgba(0, 0, 0, .65); }
