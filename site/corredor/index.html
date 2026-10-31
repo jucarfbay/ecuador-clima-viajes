@@ -27,21 +27,24 @@
     <button type="button" class="mando" id="b-info" aria-expanded="false" aria-controls="info">Fuentes</button>
   </div>
 
-  <div id="validez" class="validez" aria-live="polite"></div>
+  <div id="aviso" class="aviso" role="status" hidden></div>
 
-  <section class="tiempo" aria-label="Control temporal">
-    <div class="tiempo-cab">
-      <p id="lectura" class="lectura" aria-live="polite"></p>
+  <section class="tiempo" aria-label="Hora de salida y lluvia en el camino">
+    <div id="decision" class="decision" aria-live="polite"></div>
+    <div class="matriz-marco">
+      <div id="ejes" class="ejes" aria-hidden="true"></div>
+      <div class="pista" id="pista">
+        <canvas id="matriz" aria-hidden="true"></canvas>
+        <div id="mejor" class="mejor" aria-hidden="true" hidden></div>
+        <div id="viaje-banda" class="viaje-banda" aria-hidden="true"></div>
+        <input id="hora" type="range" min="0" max="95" step="1" value="0" aria-label="Hora de salida (cada columna es una salida; las filas son los tramos de Latacunga a Baños)">
+        <div id="marcas" class="marcas" aria-hidden="true"></div>
+      </div>
     </div>
-    <div class="pista" id="pista">
-      <div id="exposicion" class="exposicion" aria-hidden="true"></div>
-      <div id="viaje-banda" class="viaje-banda" aria-hidden="true"></div>
-      <div id="marcas" class="marcas" aria-hidden="true"></div>
-      <input id="hora" type="range" min="0" max="95" step="1" value="0" aria-label="Hora de salida">
-    </div>
+    <p id="pie" class="pie"></p>
   </section>
 
-  <aside id="info" class="info" hidden>
+  <aside id="info" class="info" tabindex="-1" hidden>
     <button type="button" class="cerrar" id="info-cerrar" aria-label="Cerrar">×</button>
     <h2>Fuentes y límites</h2>
     <div id="info-cuerpo"></div>

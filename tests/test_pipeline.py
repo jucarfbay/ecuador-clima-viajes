@@ -253,3 +253,17 @@ class TestPipeline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRutaCorredor(unittest.TestCase):
+    def test_tiempos_conciliados_con_la_duracion_total(self):
+        sys.path.insert(0, str(RAIZ / "tools"))
+        import ruta_corredor  # noqa: E402
+        d = {"duracion_min": 2.0, "s": [0.0, 30.0, 100.0], "hitos": [{"vertice": 0, "min": 0}, {"vertice": 2, "min": 1.67}]}
+        r = ruta_corredor.escalar_tiempos(d)
+        self.assertAlmostEqual(r["s"][-1], 120.0)
+        self.assertAlmostEqual(r["hitos"][1]["min"], 2.0)
+        self.assertEqual(ruta_corredor.escalar_tiempos(r)["s"], r["s"])  # idempotente
+        publicada = json.loads((RAIZ / "site/corredor/datos/ruta.json").read_text(encoding="utf-8"))
+        self.assertAlmostEqual(publicada["s"][-1] / 60, publicada["duracion_min"], places=1)
+        self.assertAlmostEqual(publicada["hitos"][-1]["min"], publicada["duracion_min"], places=1)

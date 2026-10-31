@@ -41,6 +41,26 @@ def decodificar_polyline(s: str, precision: int = 6) -> list[list[float]]:
     return coords
 
 
+def escalar_tiempos(d: dict) -> dict:
+    """Concilia los tiempos: las anotaciones por vértice de OSRM no incluyen las penalizaciones de giro y suman menos
+    que la duración total de la ruta. Se escalan proporcionalmente para que sumen la duración total, que es la cifra
+    que se cita en todas partes. Idempotente."""
+    total_s = d["duracion_min"] * 60
+    suma = d["s"][-1]
+    if abs(suma - total_s) < 1:
+        return d
+    f = total_s / suma
+    d["s"] = [round(x * f, 1) for x in d["s"]]
+    for h in d["hitos"]:
+        h["min"] = round(d["s"][h["vertice"]] / 60, 2)
+    d["tiempos"] = {
+        "fuente": "duración total de la ruta según OSRM (incluye penalizaciones de giro)",
+        "suma_anotaciones_min": round(suma / 60, 2), "duracion_ruta_min": d["duracion_min"], "factor": round(f, 5),
+        "metodo": "tiempos por vértice de las anotaciones de OSRM, escalados para sumar la duración total",
+    }
+    return d
+
+
 def construir(respuesta: dict, hitos: list[dict], url: str, consultado: str) -> dict:
     r = respuesta["routes"][0]
     coords = decodificar_polyline(r["geometry"])
@@ -64,7 +84,7 @@ def construir(respuesta: dict, hitos: list[dict], url: str, consultado: str) -> 
             "en_via": {"lon": wp["location"][0], "lat": wp["location"][1], "desplazamiento_m": round(wp["distance"], 1)},
             "vertice": i, "km": round(km[i], 3), "min": round(s[i] / 60, 2),
         })
-    return {
+    out = {
         "fuente": "OSRM (router.project-osrm.org) sobre OpenStreetMap",
         "licencia": "Datos de ruta © colaboradores de OpenStreetMap, ODbL 1.0",
         "url": url,
@@ -77,6 +97,7 @@ def construir(respuesta: dict, hitos: list[dict], url: str, consultado: str) -> 
         "km": [round(x, 4) for x in km],
         "s": [round(x, 1) for x in s],
     }
+    return escalar_tiempos(out)
 
 
 def main(destino: str):
@@ -97,4 +118,10 @@ def main(destino: str):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "site/corredor/datos/ruta.json")
+    if len(sys.argv) > 2 and sys.argv[1] == "--conciliar":  # aplica la conciliación a un archivo ya descargado
+        f = Path(sys.argv[2])
+        f.write_text(json.dumps(escalar_tiempos(json.loads(f.read_text(encoding="utf-8"))), ensure_ascii=False,
+                                separators=(",", ":")), encoding="utf-8")
+        print("conciliado", f)
+    else:
+        main(sys.argv[1] if len(sys.argv) > 1 else "site/corredor/datos/ruta.json")
