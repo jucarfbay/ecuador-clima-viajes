@@ -148,7 +148,8 @@ button { font: inherit; color: inherit; }
 .relieve .etq small { display: block; font-family: "Overpass", sans-serif; font-style: normal; font-size: 10px; }
 
 /* ------------------------------------------------------------ instrumento de estación y fuentes */
-.maplibregl-popup-content { background: rgba(11, 18, 24, .96); color: var(--tinta); border: 1px solid var(--ambar); border-radius: 4px; padding: 12px 14px 10px; font-family: "Overpass", sans-serif; font-size: .84rem; box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
+.maplibregl-popup { z-index: 7; }
+.maplibregl-popup-content { max-height: calc(100vh - 330px); overflow: auto; background: rgba(11, 18, 24, .96); color: var(--tinta); border: 1px solid var(--ambar); border-radius: 4px; padding: 12px 14px 10px; font-family: "Overpass", sans-serif; font-size: .84rem; box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
 .maplibregl-popup-tip { border-top-color: var(--ambar) !important; border-bottom-color: var(--ambar) !important; }
 .maplibregl-popup-close-button { color: var(--tinta-2); font-size: 20px; width: 36px; height: 36px; }
 .instrumento h3 { margin: 0; font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1.05rem; padding-right: 24px; }

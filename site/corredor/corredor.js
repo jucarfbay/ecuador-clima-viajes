@@ -521,7 +521,8 @@ function estaciones() {
       `estacion${vigente ? "" : " atrasada"}`, { prioridad: 4, boton: true });
     const el = mk.getElement();
     el.setAttribute("aria-label", `Estación ${e.nombre}, ${num(e.mm_24h)} mm medidos en 24 horas hasta las ${hhmm(Date.parse(e.ultimo))}. Abrir lectura.`);
-    const pop = new ML.Popup({ offset: 14, maxWidth: "340px", closeButton: true, focusAfterOpen: true }).setHTML(instrumento(e, d, vigente, atraso));
+    // El instrumento se abre ENCIMA de la estación; la cámara deja la estación en la mitad baja, sobre la banda.
+    const pop = new ML.Popup({ anchor: "bottom", offset: 16, maxWidth: "360px", closeButton: true, focusAfterOpen: true }).setHTML(instrumento(e, d, vigente, atraso));
     el.addEventListener("click", (ev) => { ev.stopPropagation(); enfocarEstacion(e, mk, pop); });
   }
 }
@@ -532,7 +533,7 @@ function enfocarEstacion(e, mk, pop) {
   const m = S.mapa;
   // En el teléfono el instrumento es una hoja inferior que reemplaza a la banda mientras está abierta (no se tapan).
   const abrir = MOVIL ? () => abrirHoja(pop.getElement()?.innerHTML || pop._content?.innerHTML || "", e) : () => { pop.setLngLat([e.lon, e.lat]).addTo(m); };
-  const destino = { center: [e.lon, e.lat], zoom: MOVIL ? 11.4 : 12.2, pitch: 58, bearing: m.getBearing(), offset: [0, MOVIL ? -140 : 90] };
+  const destino = { center: [e.lon, e.lat], zoom: MOVIL ? 11.4 : 12.2, pitch: 58, bearing: m.getBearing(), offset: [0, MOVIL ? -140 : Math.round(innerHeight * 0.2)] };
   if (MOV) { m.once("moveend", abrir); m.flyTo({ ...destino, duration: 1800, essential: true }); } else { m.jumpTo(destino); abrir(); }
 }
 
