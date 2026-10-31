@@ -1,0 +1,149 @@
+/* El corredor vivo — prueba técnica. El paisaje es la interfaz; los controles son instrumentos al borde. */
+
+@font-face { font-family: "Fraunces"; font-weight: 400; font-display: swap; src: url(fuentes/fraunces-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Fraunces"; font-weight: 600; font-display: swap; src: url(fuentes/fraunces-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Overpass"; font-weight: 400; font-display: swap; src: url(../fuentes/overpass-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Overpass"; font-weight: 600; font-display: swap; src: url(../fuentes/overpass-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Overpass"; font-weight: 800; font-display: swap; src: url(../fuentes/overpass-latin-800-normal.woff2) format("woff2"); }
+
+:root {
+  --obsidiana: #0B1218;      /* sombras del terreno, fondo */
+  --tinta: #ECEFEA;          /* texto sobre la escena */
+  --tinta-2: #A9B6B4;        /* texto secundario (7,9:1 sobre obsidiana) */
+  --ambar: #F2B45A;          /* medido: instrumentos de estación */
+  --sol: #F3E3BF;            /* trayectoria seca, luz en crestas */
+  --lluvia-1: #9CC8EC; --lluvia-2: #4B8FD6; --lluvia-3: #2F5FB8; --lluvia-4: #6B3FB3; /* pronóstico */
+  --banda: rgba(11, 18, 24, .78);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--obsidiana); color: var(--tinta); overflow: hidden; }
+body { font-family: "Overpass", system-ui, sans-serif; font-size: 15px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+#escena { position: fixed; inset: 0; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--sol); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+/* Título editorial: el destino, sobre el cielo. */
+.titulo {
+  position: fixed; top: max(18px, env(safe-area-inset-top)); left: 24px; z-index: 5; pointer-events: none;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, .55);
+}
+.ruta-nombre { margin: 0; font-family: "Fraunces", Georgia, serif; font-weight: 400; font-size: clamp(1.9rem, 3.2vw, 3rem); line-height: 1; letter-spacing: -.01em; display: flex; gap: .35em; align-items: baseline; }
+.ruta-nombre .flecha { font-family: "Overpass", sans-serif; font-weight: 400; font-size: .55em; color: var(--sol); transform: translateY(-.15em); }
+.titulo-sub { margin: 8px 0 0; color: var(--tinta-2); font-size: .9rem; }
+
+/* Mandos de cámara: arriba a la derecha, discretos. */
+.mandos { position: fixed; top: max(18px, env(safe-area-inset-top)); right: 18px; z-index: 5; display: flex; gap: 6px; }
+.mando {
+  min-height: 38px; padding: 8px 12px 6px; border-radius: 6px; border: 1px solid rgba(236, 239, 234, .28);
+  background: rgba(11, 18, 24, .55); cursor: pointer; font-weight: 600; font-size: .86rem;
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+}
+.mando:hover { border-color: rgba(236, 239, 234, .6); }
+.mando.principal { display: inline-flex; align-items: center; gap: 6px; background: var(--sol); color: var(--obsidiana); border-color: var(--sol); }
+.mando.principal svg { width: 14px; height: 14px; fill: currentColor; margin-top: -2px; }
+.mando .i-pausa, .mando[aria-pressed="true"] .i-play { display: none; }
+.mando[aria-pressed="true"] .i-pausa { display: inline; }
+
+/* Validez del pronóstico: siempre visible, abajo a la izquierda, sobre la banda temporal. */
+.validez {
+  position: fixed; left: 24px; bottom: 132px; z-index: 5; max-width: 420px; font-size: .78rem; color: var(--tinta-2);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .8);
+}
+.validez strong { color: var(--tinta); font-weight: 600; }
+.validez .escala { display: flex; align-items: center; gap: 0; margin: 6px 0 4px; height: 8px; width: 240px; border-radius: 2px; overflow: hidden; }
+.validez .escala span { flex: 1; height: 100%; }
+.validez .valores { display: flex; justify-content: space-between; width: 240px; font-size: .7rem; }
+
+/* Banda temporal: una sola pieza al borde inferior. */
+.tiempo {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; padding: 10px 24px max(12px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(11, 18, 24, .92) 55%, rgba(11, 18, 24, 0));
+}
+.tiempo-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+.lectura { margin: 0; font-size: .95rem; }
+.lectura b { font-weight: 800; font-size: 1.05rem; }
+.lectura .tenue { color: var(--tinta-2); }
+.pista { position: relative; height: 58px; }
+.exposicion { position: absolute; left: 0; right: 0; top: 0; height: 30px; display: flex; align-items: flex-start; gap: 1px; }
+.exposicion i { flex: 1; display: block; background: var(--lluvia-2); opacity: .85; border-radius: 0 0 2px 2px; min-height: 1px; }
+.exposicion i.sin { background: rgba(236, 239, 234, .12); }
+.exposicion i.pasado { opacity: .25; }
+.viaje-banda { position: absolute; top: 0; height: 30px; border: 1.5px solid var(--sol); border-top-width: 3px; border-radius: 0 0 3px 3px; pointer-events: none; }
+.marcas { position: absolute; left: 0; right: 0; top: 32px; height: 14px; font-size: .68rem; color: var(--tinta-2); }
+.marcas span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.marcas span.dia { color: var(--tinta); font-weight: 600; transform: none; border-left: 1px solid rgba(236, 239, 234, .4); padding-left: 4px; }
+.marcas span.ahora { color: var(--ambar); }
+#hora { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: 58px; margin: 0; opacity: 0; cursor: ew-resize; }
+#hora:focus-visible + .x, .pista:focus-within .viaje-banda { box-shadow: 0 0 0 2px var(--sol); }
+
+/* Etiquetas sobre el terreno (marcadores HTML anclados al relieve). */
+.hito { pointer-events: none; text-align: center; transform: translateY(-6px); }
+.hito .nombre { font-family: "Fraunces", Georgia, serif; font-size: 17px; color: #fff; text-shadow: 0 0 3px #000, 0 1px 10px rgba(0, 0, 0, .9); white-space: nowrap; }
+.hito .paso { display: block; font-size: 12px; font-weight: 600; color: var(--sol); text-shadow: 0 0 3px #000, 0 0 8px #000; }
+.hito .punto { display: block; width: 7px; height: 7px; margin: 3px auto 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgba(0, 0, 0, .6); }
+
+.estacion { cursor: pointer; display: flex; flex-direction: column; align-items: center; background: none; border: 0; padding: 0; }
+.estacion .placa {
+  display: block; padding: 4px 7px 2px; background: rgba(11, 18, 24, .86); border: 1px solid var(--ambar); border-radius: 3px;
+  font-size: 11.5px; line-height: 1.25; color: var(--tinta); text-align: left; white-space: nowrap;
+}
+.estacion .placa b { color: var(--ambar); font-weight: 800; font-size: 13px; }
+.estacion .placa small { display: block; color: var(--tinta-2); font-size: 10.5px; }
+.estacion .tallo { display: block; width: 1.5px; height: 46px; background: linear-gradient(var(--ambar), rgba(242, 180, 90, .2)); }
+.estacion .base { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--ambar); box-shadow: 0 0 0 3px rgba(242, 180, 90, .25); margin-top: -2px; }
+.estacion.atrasada .placa { border-style: dashed; border-color: var(--tinta-2); }
+.estacion.atrasada .placa b { color: var(--tinta-2); }
+.estacion.atrasada .base { background: var(--tinta-2); }
+
+.vehiculo { pointer-events: none; display: flex; flex-direction: column; align-items: center; }
+.vehiculo .hora-v { font-weight: 800; font-size: 13px; color: var(--obsidiana); background: var(--sol); padding: 2px 6px 0; border-radius: 3px; margin-bottom: 4px; box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
+.vehiculo .p { width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px var(--obsidiana), 0 0 18px 6px rgba(243, 227, 191, .55); }
+
+/* Instrumento de estación y fuentes: paneles transitorios. */
+.maplibregl-popup-content { background: rgba(11, 18, 24, .95); color: var(--tinta); border: 1px solid var(--ambar); border-radius: 4px; padding: 12px 14px 10px; font-family: "Overpass", sans-serif; font-size: .84rem; box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
+.maplibregl-popup-tip { border-top-color: var(--ambar) !important; border-bottom-color: var(--ambar) !important; }
+.maplibregl-popup-close-button { color: var(--tinta-2); font-size: 18px; padding: 2px 8px; }
+.instrumento h3 { margin: 0 0 2px; font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1.05rem; }
+.instrumento .cifra { font-size: 1.6rem; font-weight: 800; color: var(--ambar); line-height: 1.1; }
+.instrumento dl { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; margin: 8px 0 0; font-size: .78rem; }
+.instrumento dt { color: var(--tinta-2); }
+.instrumento dd { margin: 0; }
+.instrumento .contraste { margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(236, 239, 234, .15); font-size: .8rem; }
+
+.info {
+  position: fixed; top: 70px; right: 18px; z-index: 8; width: min(440px, calc(100vw - 36px)); max-height: calc(100vh - 230px); overflow: auto;
+  background: rgba(11, 18, 24, .96); border: 1px solid rgba(236, 239, 234, .2); border-radius: 6px; padding: 16px 18px; font-size: .84rem;
+}
+.info h2 { margin: 0 0 8px; font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1.2rem; }
+.info h3 { margin: 12px 0 2px; font-size: .86rem; color: var(--sol); }
+.info p, .info li { color: var(--tinta-2); margin: 2px 0; }
+.info ul { padding-left: 18px; margin: 4px 0; }
+.info a { color: var(--lluvia-1); }
+.info .cerrar { position: absolute; top: 6px; right: 6px; width: 36px; height: 36px; background: none; border: 0; font-size: 1.3rem; color: var(--tinta-2); cursor: pointer; }
+
+.estado-carga { position: fixed; inset: 0; display: grid; place-items: center; z-index: 20; background: var(--obsidiana); color: var(--tinta-2); font-family: "Fraunces", Georgia, serif; font-size: 1.2rem; transition: opacity .8s; }
+.estado-carga.listo { opacity: 0; pointer-events: none; }
+.estado-carga.error { color: var(--tinta); font-family: "Overpass", sans-serif; font-size: 1rem; padding: 24px; text-align: center; }
+
+.maplibregl-ctrl-attrib { background: rgba(11, 18, 24, .6) !important; color: var(--tinta-2); font-size: 10px; }
+.maplibregl-ctrl-attrib a { color: var(--tinta-2); }
+.maplibregl-ctrl-bottom-right { bottom: 104px; }
+
+@media (max-width: 640px) {
+  body { font-size: 14px; }
+  .titulo { left: 16px; top: max(12px, env(safe-area-inset-top)); }
+  .titulo-sub { font-size: .78rem; margin-top: 4px; }
+  .mandos { top: auto; bottom: 128px; right: 12px; flex-direction: column; align-items: flex-end; }
+  .mando { min-height: 36px; padding: 7px 10px 5px; font-size: .8rem; }
+  .validez { left: 16px; bottom: 128px; max-width: calc(100vw - 140px); }
+  .validez .escala, .validez .valores { width: 160px; }
+  .tiempo { padding: 8px 14px max(10px, env(safe-area-inset-bottom)); }
+  .lectura { font-size: .85rem; }
+  .hito .nombre { font-size: 15px; }
+  .estacion .tallo { height: 30px; }
+  .info { top: 64px; right: 12px; max-height: calc(100vh - 220px); }
+  .maplibregl-ctrl-bottom-right { bottom: 96px; }
+}
+@media (prefers-reduced-motion: reduce) { .estado-carga { transition: none; } }

@@ -225,6 +225,7 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual(len(claves), len(c["celdas"]))  # sin celdas repetidas
         self.assertLess(len(c["celdas"]), c["consultas"])  # varias consultas por celda nativa: no se inventa detalle
         self.assertAlmostEqual(c["paso_lat"], 0.07, places=3)
+        self.assertAlmostEqual(c["paso_lon"], 0.07, places=3)
         self.assertEqual(c["corrida_inicio_utc"], "2026-10-30T18:00+00:00")
         self.assertIn("O1280", c["rejilla"])
         # Ventana: 24 h antes y 72 h después de la próxima hora (21:00 del 29). La serie falsa empieza el 29 a las

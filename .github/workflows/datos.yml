@@ -83,6 +83,7 @@ jobs:
           V="${GITHUB_SHA::7}"
           sed -i "s|src=\"app.js\"|src=\"app.js?v=$V\"|; s|src=\"logica.js\"|src=\"logica.js?v=$V\"|; s|href=\"estilos.css\"|href=\"estilos.css?v=$V\"|" site/index.html
           sed -i "s|^const VERSION = \"dev\";|const VERSION = \"$V\";|" site/app.js
+          sed -i "s|src=\"corredor.js\"|src=\"corredor.js?v=$V\"|; s|href=\"corredor.css\"|href=\"corredor.css?v=$V\"|" site/corredor/index.html
           grep -q "app.js?v=$V" site/index.html && grep -q "logica.js?v=$V" site/index.html && grep -q "VERSION = \"$V\"" site/app.js
 
       - uses: actions/configure-pages@v5

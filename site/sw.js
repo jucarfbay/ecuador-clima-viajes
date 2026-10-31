@@ -49,6 +49,7 @@ self.addEventListener("fetch", (ev) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // mosaicos e imágenes satelitales: directo a la red
+  if (url.pathname.includes("/corredor/") || url.pathname.includes("/vendor/maplibre/")) return; // prototipo aparte, sin caché
   if (url.pathname.includes("/data/")) { ev.respondWith(redPrimero(req, CACHE_DATOS)); return; }
   if (req.mode === "navigate") { ev.respondWith(redPrimero(req, CACHE_PAGINA)); return; }
   ev.respondWith(copiaPrimero(req));

@@ -204,6 +204,15 @@ def _paso_mediano(valores):
     return difs[len(difs) // 2] if difs else None
 
 
+def _paso_lon_por_fila(celdas):
+    """En una rejilla gaussiana reducida cada fila de latitud tiene su propio espaciado en longitud."""
+    filas = {}
+    for c in celdas:
+        filas.setdefault(c["lat"], []).append(c["lon"])
+    difs = sorted(round(b - a, 5) for lons in filas.values() for a, b in zip(sorted(lons), sorted(lons)[1:]))
+    return difs[len(difs) // 2] if difs else None
+
+
 def corredor_lluvia(http: Http, ahora: datetime):
     """Celdas nativas de ECMWF HRES sobre el corredor: 24 h pasadas (misma corrida) y 72 h hacia adelante."""
     r = hres_corredor(http)
@@ -215,7 +224,6 @@ def corredor_lluvia(http: Http, ahora: datetime):
     sel = [i for i, ts in enumerate(r["tiempos"])
            if proxima - timedelta(hours=24) <= datetime.fromisoformat(ts) < proxima + timedelta(hours=72)]
     lats = [c["lat"] for c in r["celdas"]]
-    lons = [c["lon"] for c in r["celdas"]]
     return {
         "generado": ahora.isoformat(timespec="minutes"),
         "modelo": "ECMWF IFS HRES (Open-Meteo, modelo ecmwf_ifs)",
@@ -226,7 +234,7 @@ def corredor_lluvia(http: Http, ahora: datetime):
         "seleccion": "celda nativa más cercana (cell_selection=nearest); sin interpolación",
         "corrida_inicio_utc": meta.get("corrida_inicio"),
         "corrida_disponible_utc": meta.get("corrida_disponible"),
-        "paso_lat": _paso_mediano(lats), "paso_lon": _paso_mediano(lons),
+        "paso_lat": _paso_mediano(lats), "paso_lon": _paso_lon_por_fila(r["celdas"]),
         "celdas": r["celdas"],
         "tiempos": [r["tiempos"][i] for i in sel],
         "valores_dmm": [[None if s[i] is None else int(round(s[i] * 10)) for s in r["series"]] for i in sel],

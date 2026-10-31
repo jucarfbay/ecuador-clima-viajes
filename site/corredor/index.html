@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>El corredor vivo</title>
+  <meta name="description" content="Prueba técnica: el corredor Latacunga–Ambato–Pelileo–Baños en relieve real, con la lluvia prevista a la hora en que pasarías.">
+  <meta name="theme-color" content="#0B1218">
+  <link rel="preload" href="fuentes/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../vendor/maplibre/maplibre-gl.css">
+  <link rel="stylesheet" href="corredor.css">
+</head>
+<body>
+  <div id="escena" aria-label="Escena 3D del corredor Latacunga–Baños sobre relieve real"></div>
+
+  <header class="titulo">
+    <p class="ruta-nombre"><span>Latacunga</span><span class="flecha" aria-hidden="true">→</span><span>Baños</span></p>
+    <p id="titulo-sub" class="titulo-sub">80 km por la E35 y la vía a Baños</p>
+  </header>
+
+  <div class="mandos" role="group" aria-label="Cámara">
+    <button type="button" id="b-recorrer" class="mando principal" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5v14l11-7z"/><path class="i-pausa" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+      <span id="b-recorrer-texto">Recorrer</span></button>
+    <button type="button" class="mando" data-vista="general">Valle</button>
+    <button type="button" class="mando" data-vista="cenital">Cenital</button>
+    <button type="button" class="mando" id="b-info" aria-expanded="false" aria-controls="info">Fuentes</button>
+  </div>
+
+  <div id="validez" class="validez" aria-live="polite"></div>
+
+  <section class="tiempo" aria-label="Control temporal">
+    <div class="tiempo-cab">
+      <p id="lectura" class="lectura" aria-live="polite"></p>
+    </div>
+    <div class="pista" id="pista">
+      <div id="exposicion" class="exposicion" aria-hidden="true"></div>
+      <div id="viaje-banda" class="viaje-banda" aria-hidden="true"></div>
+      <div id="marcas" class="marcas" aria-hidden="true"></div>
+      <input id="hora" type="range" min="0" max="95" step="1" value="0" aria-label="Hora de salida">
+    </div>
+  </section>
+
+  <aside id="info" class="info" hidden>
+    <button type="button" class="cerrar" id="info-cerrar" aria-label="Cerrar">×</button>
+    <h2>Fuentes y límites</h2>
+    <div id="info-cuerpo"></div>
+  </aside>
+
+  <div id="estado-carga" class="estado-carga" role="status">Cargando relieve y datos…</div>
+
+  <script src="../vendor/maplibre/maplibre-gl.js"></script>
+  <script src="corredor.js"></script>
+</body>
+</html>

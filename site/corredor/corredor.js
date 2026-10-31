@@ -1,0 +1,565 @@
+/* El corredor vivo — prueba técnica cinematográfica (Latacunga → Ambato → Pelileo → Baños).
+ *
+ * Reglas de datos (no negociables):
+ *  - Relieve: elevaciones reales (Terrarium/AWS). Ruta: geometría OSRM sobre OpenStreetMap, versionada.
+ *  - Lluvia: ECMWF IFS HRES en sus celdas nativas; se dibuja cada celda tal cual, sin interpolar.
+ *  - Estaciones: metadatos y lecturas del visor del INAMHI; mover el tiempo del pronóstico NUNCA cambia una medición.
+ *  - Neblina y cielo son ambientación, no datos.
+ */
+"use strict";
+
+const ML = window.maplibregl;
+const H = 3600e3;
+const UTC5 = 5 * H; // Ecuador continental: local = UTC - 5 h
+const MOV = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const MOVIL = window.matchMedia("(max-width: 640px)").matches;
+
+// Escala de intensidad (mm en la hora). Igual en el campo, la trayectoria y la leyenda.
+const ESCALA = [
+  [0.1, [156, 200, 236]], [0.5, [111, 168, 224]], [1, [75, 143, 214]],
+  [2.5, [47, 95, 184]], [5, [107, 63, 179]], [10, [142, 44, 158]],
+];
+const SECO = [243, 227, 191]; // trayectoria sin lluvia prevista: luz de cresta
+const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+const S = {
+  ruta: null, lluvia: null, obs: null, mapa: null,
+  celdaDeVertice: null, salidas: [], k: 0, valida: -1,
+  progreso: 0, recorriendo: false, anim: null, marcadores: {}, fps: [],
+};
+
+// ------------------------------------------------------------------ utilidades
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = new Intl.NumberFormat("es-EC", { maximumFractionDigits: 1 });
+const num = (x) => (x == null || Number.isNaN(x) ? "—" : fmt.format(x));
+/** "2026-10-30T20:00" (hora local de Ecuador, sin zona) -> ms UTC. */
+const localAMs = (s) => { const [d, t = "00:00"] = s.slice(0, 16).split("T"); const [y, m, dd] = d.split("-").map(Number); const [hh, mi] = t.split(":").map(Number); return Date.UTC(y, m - 1, dd, hh, mi) + UTC5; };
+const local = (ms) => new Date(ms - UTC5); // campos UTC = hora local
+const hhmm = (ms) => local(ms).toISOString().slice(11, 16);
+const diaTxt = (ms) => { const d = local(ms); return `${DIAS[d.getUTCDay()]} ${d.getUTCDate()}`; };
+const fechaTxt = (ms) => { const d = local(ms); return `${d.getUTCDate()} ${MESES[d.getUTCMonth()]}`; };
+function distKm(a, b) {
+  const R = 6371, r = Math.PI / 180;
+  const h = Math.sin((b[1] - a[1]) * r / 2) ** 2 + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.sin((b[0] - a[0]) * r / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function rumbo(a, b) {
+  const r = Math.PI / 180, y = Math.sin((b[0] - a[0]) * r) * Math.cos(b[1] * r);
+  const x = Math.cos(a[1] * r) * Math.sin(b[1] * r) - Math.sin(a[1] * r) * Math.cos(b[1] * r) * Math.cos((b[0] - a[0]) * r);
+  return (Math.atan2(y, x) / r + 360) % 360;
+}
+function colorLluvia(mm, alfa = 1) {
+  if (mm == null || mm < ESCALA[0][0]) return null;
+  let c = ESCALA[0][1];
+  for (const [u, col] of ESCALA) if (mm >= u) c = col;
+  return `rgba(${c[0]},${c[1]},${c[2]},${alfa})`;
+}
+async function json(url) { const r = await fetch(url, { cache: "no-cache" }); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
+
+// ------------------------------------------------------------------ geometría de la ruta
+
+/** Índice del vértice y fracción para un km dado (búsqueda binaria en km acumulados). */
+function enKm(km) {
+  const K = S.ruta.km;
+  if (km <= 0) return { i: 0, f: 0 };
+  if (km >= K[K.length - 1]) return { i: K.length - 2, f: 1 };
+  let lo = 0, hi = K.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (K[m] <= km) lo = m; else hi = m; }
+  return { i: lo, f: (km - K[lo]) / Math.max(1e-9, K[lo + 1] - K[lo]) };
+}
+function puntoEnKm(km) {
+  const { i, f } = enKm(km), C = S.ruta.coords;
+  return [C[i][0] + (C[i + 1][0] - C[i][0]) * f, C[i][1] + (C[i + 1][1] - C[i][1]) * f];
+}
+function segundosEnKm(km) { const { i, f } = enKm(km), s = S.ruta.s; return s[i] + (s[i + 1] - s[i]) * f; }
+function kmEnSegundos(seg) {
+  const s = S.ruta.s;
+  if (seg <= 0) return 0;
+  if (seg >= s[s.length - 1]) return S.ruta.km[s.length - 1];
+  let lo = 0, hi = s.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (s[m] <= seg) lo = m; else hi = m; }
+  const f = (seg - s[lo]) / Math.max(1e-9, s[lo + 1] - s[lo]);
+  return S.ruta.km[lo] + (S.ruta.km[lo + 1] - S.ruta.km[lo]) * f;
+}
+
+// ------------------------------------------------------------------ lluvia (celdas nativas)
+
+/** Índice de la hora del pronóstico que contiene el instante t (cada valor cubre la hora que termina en tiempos[i]). */
+function horaDe(t) {
+  const T = S.lluvia._fin;
+  for (let i = 0; i < T.length; i++) if (t < T[i] && t >= T[i] - H) return i;
+  return -1;
+}
+function mmEn(celda, i) { const v = i < 0 ? null : S.lluvia.valores_dmm[i][celda]; return v == null ? null : v / 10; }
+
+function prepararLluvia() {
+  const L = S.lluvia;
+  L._fin = L.tiempos.map(localAMs);
+  // Rejilla gaussiana reducida: cada fila de latitud tiene su propio espaciado en longitud; se mide de los datos.
+  const dlat = L.paso_lat || 0.07;
+  const filas = {};
+  L.celdas.forEach((c) => (filas[c.lat] ||= []).push(c.lon));
+  const dlonFila = {};
+  for (const [lat, lons] of Object.entries(filas)) {
+    const v = lons.sort((a, b) => a - b), d = v.slice(1).map((x, i) => x - v[i]).sort((a, b) => a - b);
+    dlonFila[lat] = d.length ? d[d.length >> 1] : dlat;
+  }
+  L._geo = {
+    type: "FeatureCollection",
+    features: L.celdas.map((c, i) => { const dlon = dlonFila[c.lat]; return ({
+      type: "Feature", id: i, properties: { v: 0 },
+      geometry: { type: "Polygon", coordinates: [[
+        [c.lon - dlon / 2, c.lat - dlat / 2], [c.lon + dlon / 2, c.lat - dlat / 2],
+        [c.lon + dlon / 2, c.lat + dlat / 2], [c.lon - dlon / 2, c.lat + dlat / 2], [c.lon - dlon / 2, c.lat - dlat / 2]]] },
+    }); }),
+  };
+  // Celda nativa de cada vértice: la de centro más cercano (misma regla que usa Open-Meteo para elegirla).
+  S.celdaDeVertice = S.ruta.coords.map(([lon, lat]) => {
+    let mejor = 0, dmin = Infinity;
+    L.celdas.forEach((c, j) => { const d = (c.lat - lat) ** 2 + ((c.lon - lon) * Math.cos(lat * Math.PI / 180)) ** 2; if (d < dmin) { dmin = d; mejor = j; } });
+    return mejor;
+  });
+}
+
+/** Lluvia (mm en la hora) que encontraría el viajero en cada vértice, saliendo en `salida` (ms UTC). */
+function lluviaEnRuta(salida) {
+  return S.ruta.s.map((seg, v) => mmEn(S.celdaDeVertice[v], horaDe(salida + seg * 1000)));
+}
+
+/** Exposición de una salida: intensidad media en el camino ponderada por tiempo, y el peor punto. */
+function exposicion(salida) {
+  const mm = lluviaEnRuta(salida), s = S.ruta.s;
+  let suma = 0, pesos = 0, peor = { mm: 0, v: -1 }, faltan = false;
+  for (let v = 1; v < s.length; v++) {
+    const dt = s[v] - s[v - 1];
+    if (mm[v] == null) { faltan = true; continue; }
+    suma += mm[v] * dt; pesos += dt;
+    if (mm[v] > peor.mm) peor = { mm: mm[v], v };
+  }
+  return { media: pesos ? suma / pesos : null, peor, faltan };
+}
+
+// ------------------------------------------------------------------ escena
+
+function estilo() {
+  return {
+    version: 8,
+    sources: {
+      satelite: {
+        type: "raster", tileSize: 256, maxzoom: 13,
+        tiles: ["https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg"],
+        attribution: '<a href="https://s2maps.eu">Sentinel-2 cloudless 2024 by EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2024), CC BY-NC-SA 4.0',
+      },
+      dem: {
+        type: "raster-dem", encoding: "terrarium", tileSize: 256, maxzoom: 14,
+        tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+        attribution: 'Relieve: <a href="https://registry.opendata.aws/terrain-tiles/">Terrain Tiles</a> (Mapzen/AWS; SRTM y otras fuentes)',
+      },
+      sombras: {
+        type: "raster-dem", encoding: "terrarium", tileSize: 256, maxzoom: 14,
+        tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+      },
+    },
+    layers: [
+      { id: "fondo", type: "background", paint: { "background-color": "#0B1218" } },
+      { id: "satelite", type: "raster", source: "satelite",
+        paint: { "raster-saturation": -0.22, "raster-contrast": 0.12, "raster-brightness-max": 0.86, "raster-brightness-min": 0.02 } },
+      { id: "sombras", type: "hillshade", source: "sombras",
+        paint: {
+          "hillshade-method": "combined",
+          "hillshade-illumination-direction": 295, "hillshade-illumination-altitude": 28, "hillshade-illumination-anchor": "map",
+          "hillshade-exaggeration": 0.42, "hillshade-shadow-color": "#06101a", "hillshade-highlight-color": "rgba(255,226,170,0.35)",
+          "hillshade-accent-color": "#0b1621",
+        } },
+    ],
+    terrain: { source: "dem", exaggeration: 1.0 },
+    sky: {
+      "sky-color": "#14273a", "horizon-color": "#d8c6a2", "fog-color": "#4d6170",
+      "sky-horizon-blend": 0.55, "horizon-fog-blend": 0.7, "fog-ground-blend": 0.82,
+      "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 0.9, 12, 0.35],
+    },
+  };
+}
+
+const VISTAS = {
+  general: () => ({ center: [-78.545, -1.205], zoom: MOVIL ? 9.55 : 10.25, pitch: 66, bearing: 158 }),
+  cenital: () => ({ center: [-78.53, -1.17], zoom: MOVIL ? 9.2 : 9.85, pitch: 0, bearing: 0 }),
+  intro: () => ({ center: [-78.62, -0.95], zoom: MOVIL ? 8.7 : 9.3, pitch: 50, bearing: 168 }),
+};
+
+async function iniciar() {
+  try {
+    const [ruta, lluvia, obs] = await Promise.all([
+      json("datos/ruta.json"), json("../data/corredor_lluvia.json"), json("../data/estaciones.json").catch(() => null)]);
+    Object.assign(S, { ruta, lluvia, obs });
+  } catch (e) {
+    const el = $("#estado-carga");
+    el.classList.add("error");
+    el.textContent = `No se pudieron cargar los datos del corredor (${e.message}). La escena no se muestra con datos incompletos.`;
+    return;
+  }
+  prepararLluvia();
+  prepararSalidas();
+
+  const mapa = new ML.Map({
+    container: "escena", style: estilo(), ...VISTAS.intro(), maxPitch: 78, attributionControl: { compact: MOVIL },
+    canvasContextAttributes: { antialias: true }, fadeDuration: 0,
+  });
+  S.mapa = mapa;
+  window.__mapa = mapa;
+  mapa.on("error", (ev) => console.warn("mapa", ev?.error?.message || ev));
+  mapa.on("load", () => {
+    capas();
+    marcadores();
+    estaciones();
+    controles();
+    elegirSalida(S.k, { mover: false });
+    $("#estado-carga").classList.add("listo");
+    if (MOV) dibujarEntrada(); else { mapa.jumpTo(VISTAS.general()); pintarRuta(1); }
+    medirFps();
+  });
+  mapa.on("dragstart", detener);
+  mapa.on("rotatestart", (e) => { if (e.originalEvent) detener(); });
+}
+
+function capas() {
+  const m = S.mapa, R = S.ruta;
+  m.addSource("lluvia", { type: "geojson", data: S.lluvia._geo });
+  m.addLayer({ id: "lluvia", type: "fill", source: "lluvia",
+    paint: {
+      "fill-color": ["step", ["get", "v"], "rgba(0,0,0,0)", ...ESCALA.flatMap(([u, c]) => [u, `rgb(${c.join(",")})`])],
+      "fill-opacity": ["case", ["<", ["get", "v"], 0.1], 0, 0.5], "fill-antialias": false,
+    } });
+  // Bordes de celda muy tenues: la resolución real del modelo queda a la vista.
+  m.addLayer({ id: "lluvia-celdas", type: "line", source: "lluvia",
+    paint: { "line-color": "rgba(236,239,234,0.10)", "line-width": 0.6 } });
+
+  const linea = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: R.coords } };
+  m.addSource("ruta", { type: "geojson", data: linea, lineMetrics: true });
+  m.addLayer({ id: "ruta-sombra", type: "line", source: "ruta", layout: { "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": "rgba(6,12,18,0.75)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 5, 13, 11], "line-blur": 2 } });
+  m.addLayer({ id: "ruta", type: "line", source: "ruta", layout: { "line-join": "round", "line-cap": "round" },
+    paint: { "line-width": ["interpolate", ["linear"], ["zoom"], 8, 2.6, 13, 6.5], "line-gradient": "rgba(243,227,191,0)" } });
+}
+
+/** Colorea la trayectoria con la lluvia a la hora de paso. `hasta` (0–1) revela el trazo; `vehiculo` atenúa lo recorrido. */
+function pintarRuta(hasta = 1, vehiculoKm = null) {
+  const R = S.ruta, total = R.km[R.km.length - 1];
+  const mm = lluviaEnRuta(S.salidas[S.k]);
+  const paradas = [];
+  let ultimo = -1;
+  for (let v = 0; v < R.coords.length; v++) {
+    const p = R.km[v] / total;
+    if (p - ultimo < 0.004 && v !== R.coords.length - 1) continue;
+    ultimo = p;
+    const recorrido = vehiculoKm != null && R.km[v] < vehiculoKm;
+    const alfa = p > hasta ? 0 : recorrido ? 0.45 : 1;
+    const c = colorLluvia(mm[v], alfa) || `rgba(${SECO.join(",")},${alfa})`;
+    paradas.push(p, c);
+  }
+  // line-progress exige paradas estrictamente crecientes
+  const limpias = [];
+  for (let i = 0; i < paradas.length; i += 2) if (!limpias.length || paradas[i] > limpias[limpias.length - 2]) limpias.push(paradas[i], paradas[i + 1]);
+  S.mapa.setPaintProperty("ruta", "line-gradient", ["interpolate", ["linear"], ["line-progress"], ...limpias]);
+}
+
+function pintarCampo(i) {
+  if (i === S.valida) return;
+  S.valida = i;
+  const L = S.lluvia;
+  L._geo.features.forEach((f, j) => { f.properties.v = mmEn(j, i) ?? 0; });
+  S.mapa.getSource("lluvia").setData(L._geo);
+  pintarValidez();
+}
+
+function pintarValidez() {
+  const L = S.lluvia, i = S.valida;
+  const fin = L._fin[i], ini = fin - H;
+  const corrida = L.corrida_inicio_utc ? `${fechaTxt(Date.parse(L.corrida_inicio_utc))}, ${hhmm(Date.parse(L.corrida_inicio_utc))}` : "sin dato de corrida";
+  const km = Math.round((L.paso_lat || 0.07) * 111);
+  $("#validez").innerHTML = i < 0 ? "Sin pronóstico para esta hora." : `
+    <strong>Lluvia prevista de ${hhmm(ini)} a ${hhmm(fin)}, ${diaTxt(ini)}</strong><br>
+    ECMWF IFS HRES, determinista. Celdas nativas de ~${km} km sin interpolar. Corrida del ${corrida}.
+    <div class="escala">${ESCALA.map(([, c]) => `<span style="background:rgb(${c.join(",")})"></span>`).join("")}</div>
+    <div class="valores"><span>0,1</span><span>1</span><span>5</span><span>10+ mm/h</span></div>`;
+}
+
+// ------------------------------------------------------------------ marcadores anclados al relieve
+
+function marcador(html, lngLat, clase, anchor = "bottom") {
+  const el = document.createElement("div");
+  el.className = clase;
+  el.innerHTML = html;
+  return new ML.Marker({ element: el, anchor }).setLngLat(lngLat).addTo(S.mapa);
+}
+
+function marcadores() {
+  for (const h of S.ruta.hitos) {
+    S.marcadores[h.id] = marcador(`<span class="nombre">${esc(h.nombre)}</span><span class="paso"></span><span class="punto"></span>`,
+      [h.en_via.lon, h.en_via.lat], "hito");
+  }
+  S.vehiculo = marcador(`<span class="hora-v"></span><span class="p"></span>`, S.ruta.coords[0], "vehiculo");
+}
+
+function pintarHitos(salida) {
+  for (const h of S.ruta.hitos) {
+    const el = S.marcadores[h.id].getElement().querySelector(".paso");
+    el.textContent = h.min === 0 ? `sales ${hhmm(salida)}` : `pasas ${hhmm(salida + h.min * 60e3)}`;
+  }
+}
+
+function moverVehiculo(km) {
+  const p = puntoEnKm(km);
+  S.vehiculo.setLngLat(p);
+  const t = S.salidas[S.k] + segundosEnKm(km) * 1000;
+  S.vehiculo.getElement().querySelector(".hora-v").textContent = hhmm(t);
+  return t;
+}
+
+// Estaciones: solo las que están a 7 km o menos de la vía y con coordenadas del visor.
+function estaciones() {
+  const ests = (S.obs?.estaciones || []).map((e) => {
+    let d = Infinity;
+    for (let v = 0; v < S.ruta.coords.length; v += 4) d = Math.min(d, distKm([e.lon, e.lat], S.ruta.coords[v]));
+    return { e, d };
+  }).filter((x) => x.d <= 7).sort((a, b) => a.d - b.d);
+  S.estaciones = ests;
+  for (const { e, d } of ests) {
+    const atraso = (Date.now() - Date.parse(e.ultimo)) / H;
+    const vigente = atraso <= (S.obs.vigencia_h || 3);
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = `estacion${vigente ? "" : " atrasada"}`;
+    el.setAttribute("aria-label", `Estación ${e.nombre}: ${num(e.mm_24h)} mm en 24 horas hasta las ${hhmm(Date.parse(e.ultimo))}`);
+    el.innerHTML = `<span class="placa"><b>${num(e.mm_24h)} mm</b> en 24 h<small>${esc(e.codigo)}, medido hasta ${hhmm(Date.parse(e.ultimo))}</small></span><span class="tallo"></span><span class="base"></span>`;
+    const pop = new ML.Popup({ offset: [0, -64], maxWidth: "320px", closeButton: true }).setHTML(instrumento(e, d, vigente, atraso));
+    new ML.Marker({ element: el, anchor: "bottom" }).setLngLat([e.lon, e.lat]).setPopup(pop).addTo(S.mapa);
+  }
+}
+
+/** Lupa de contraste: misma celda nativa y mismas horas, solo si hay ambas series. */
+function contraste(e) {
+  const L = S.lluvia;
+  let j = 0, dmin = Infinity;
+  L.celdas.forEach((c, k) => { const d = (c.lat - e.lat) ** 2 + (c.lon - e.lon) ** 2; if (d < dmin) { dmin = d; j = k; } });
+  const idx = Object.fromEntries(L.tiempos.map((t, i) => [t.slice(0, 16), i]));
+  let med = 0, pron = 0, n = 0;
+  for (const [f, v] of e.ultimas_24h || []) {
+    const i = idx[String(f).slice(0, 16)];
+    if (i == null || v == null) continue;
+    const p = mmEn(j, i);
+    if (p == null) continue;
+    med += v; pron += p; n++;
+  }
+  return n ? { med, pron, n } : null;
+}
+
+function instrumento(e, d, vigente, atraso) {
+  const fin = Date.parse(e.ultimo);
+  const c = contraste(e);
+  return `<div class="instrumento">
+    <h3>${esc(e.nombre)}</h3>
+    <div class="cifra">${num(e.mm_1h)} mm</div>
+    <div>en la hora de ${hhmm(fin - H)} a ${hhmm(fin)}, ${diaTxt(fin)}${vigente ? "" : ` <b>(dato con ${num(atraso)} h de atraso)</b>`}</div>
+    <dl>
+      <dt>3 h / 24 h / 72 h</dt><dd>${num(e.mm_3h)} / ${num(e.mm_24h)} / ${num(e.mm_72h)} mm</dd>
+      <dt>Código</dt><dd>${esc(e.codigo)} (${esc(e.propietario || "")})</dd>
+      <dt>Posición</dt><dd>${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}${e.altitud ? `, ${Math.round(e.altitud)} m` : ""}; a ${num(d)} km de la vía</dd>
+      <dt>Transmisión</dt><dd>${esc(e.frecuencia || "—")}</dd>
+      <dt>Calidad</dt><dd>sin validar (dato en tiempo real)</dd>
+      <dt>Fuente</dt><dd>visor de estaciones del INAMHI</dd>
+    </dl>
+    <div class="contraste">${c
+      ? `<b>Medido ${num(c.med)} mm, pronosticado ${num(c.pron)} mm</b> en las mismas ${c.n} horas, en la celda del modelo que contiene la estación (ECMWF HRES). Una celda de ~9 km no representa un solo pluviómetro.`
+      : "Sin comparación disponible: no hay horas en común entre lo medido y el pronóstico guardado."}</div>
+  </div>`;
+}
+
+// ------------------------------------------------------------------ tiempo: salidas y banda
+
+function prepararSalidas() {
+  const L = S.lluvia, dur = S.ruta.s[S.ruta.s.length - 1] * 1000;
+  const ahora = Date.now();
+  const primera = Math.floor((ahora - UTC5) / H) * H + UTC5; // inicio de la hora en curso
+  const fin = L._fin[L._fin.length - 1];
+  S.salidas = [];
+  for (let t = primera; t + dur <= fin; t += H) S.salidas.push(t);
+  // Salida inicial: el próximo 08:00 (escenario de la guía) si existe; si no, la hora en curso.
+  const k8 = S.salidas.findIndex((t) => local(t).getUTCHours() === 8 && t >= ahora);
+  S.k = k8 >= 0 ? k8 : 0;
+  const ex = S.salidas.map(exposicion);
+  const max = Math.max(1, ...ex.map((x) => x.media || 0));
+  $("#exposicion").innerHTML = ex.map((x) => x.media == null
+    ? `<i class="sin" style="height:2px"></i>`
+    : `<i style="height:${Math.max(2, (x.media / max) * 30).toFixed(0)}px"></i>`).join("");
+  S.exposiciones = ex;
+  const n = S.salidas.length;
+  const hora = $("#hora");
+  hora.max = n - 1;
+  const marcas = [];
+  S.salidas.forEach((t, k) => {
+    const h = local(t).getUTCHours();
+    const x = ((k + 0.5) / n) * 100;
+    if (h === 0) marcas.push(`<span class="dia" style="left:${(k / n) * 100}%">${diaTxt(t)}</span>`);
+    else if (h % 6 === 0 && !MOVIL) marcas.push(`<span style="left:${x}%">${String(h).padStart(2, "0")}:00</span>`);
+  });
+  marcas.push(`<span class="ahora" style="left:${(((ahora - primera) / H) / n) * 100}%">ahora</span>`);
+  $("#marcas").innerHTML = marcas.join("");
+}
+
+function elegirSalida(k, { mover = true } = {}) {
+  S.k = Math.max(0, Math.min(S.salidas.length - 1, k));
+  const salida = S.salidas[S.k], dur = S.ruta.s[S.ruta.s.length - 1] * 1000, n = S.salidas.length;
+  $("#hora").value = S.k;
+  $("#hora").setAttribute("aria-valuetext", `Salida ${diaTxt(salida)} a las ${hhmm(salida)}`);
+  const banda = $("#viaje-banda");
+  banda.style.left = `${(S.k / n) * 100}%`;
+  banda.style.width = `${Math.max(0.6, (dur / H / n) * 100)}%`;
+  pintarHitos(salida);
+  S.progreso = 0;
+  moverVehiculo(0);
+  pintarCampo(horaDe(salida));
+  pintarRuta(1, null);
+  pintarLectura();
+  if (mover && S.recorriendo) detener();
+}
+
+function pintarLectura(tVehiculo = null) {
+  const salida = S.salidas[S.k], dur = S.ruta.s[S.ruta.s.length - 1] * 1000;
+  const ex = S.exposiciones[S.k];
+  let camino;
+  if (ex.media == null) camino = '<span class="tenue">Sin pronóstico para todo el trayecto.</span>';
+  else if (ex.peor.mm < 0.1) camino = "Sin lluvia prevista en el camino.";
+  else {
+    const km = S.ruta.km[ex.peor.v];
+    const cerca = S.ruta.hitos.reduce((a, h) => (Math.abs(h.km - km) < Math.abs(a.km - km) ? h : a));
+    camino = `Lluvia de hasta ${num(ex.peor.mm)} mm/h hacia las ${hhmm(salida + S.ruta.s[ex.peor.v] * 1000)}, cerca de ${esc(cerca.nombre)}.`;
+  }
+  const ahora = tVehiculo ? ` <span class="tenue">En ruta: ${hhmm(tVehiculo)}.</span>` : "";
+  $("#lectura").innerHTML = `<b>Sales ${diaTxt(salida)} a las ${hhmm(salida)}</b>, llegas hacia las ${hhmm(salida + dur)}. ${camino}${ahora}`;
+}
+
+// ------------------------------------------------------------------ cámara
+
+function dibujarEntrada() {
+  const m = S.mapa, t0 = performance.now(), dur = 3200;
+  m.flyTo({ ...VISTAS.general(), duration: 5200, curve: 1.15, essential: true });
+  const paso = (t) => {
+    const q = Math.min(1, (t - t0) / dur);
+    pintarRuta(1 - (1 - q) ** 3, null);
+    if (q < 1) requestAnimationFrame(paso);
+  };
+  requestAnimationFrame(paso);
+}
+
+const angDif = (a, b) => ((b - a + 540) % 360) - 180;
+
+function recorrer() {
+  if (S.recorriendo) { detener(); return; }
+  S.recorriendo = true;
+  botonRecorrer(true);
+  const m = S.mapa, R = S.ruta, total = R.km[R.km.length - 1];
+  const duracionMs = MOVIL ? 26000 : 30000; // 92 min de viaje en ~30 s
+  if (!MOV) { // sin vuelo: saltos por hito
+    let i = 0;
+    const saltar = () => {
+      if (!S.recorriendo) return;
+      const h = R.hitos[i];
+      m.jumpTo({ center: [h.en_via.lon, h.en_via.lat], zoom: 12, pitch: 60, bearing: m.getBearing() });
+      const t = moverVehiculo(h.km); pintarCampo(horaDe(t)); pintarRuta(1, h.km); pintarLectura(t);
+      if (++i < R.hitos.length) S.anim = setTimeout(saltar, 2500); else detener();
+    };
+    saltar();
+    return;
+  }
+  let inicio = null, km0 = S.progreso >= total - 0.05 ? 0 : S.progreso;
+  let rumboSuave = m.getBearing(), centro = puntoEnKm(km0), zoomSuave = m.getZoom(), ultimoPintado = -1;
+  const paso = (ahoraMs) => {
+    if (!S.recorriendo) return;
+    if (inicio == null) inicio = ahoraMs - (km0 / total) * duracionMs;
+    const q = Math.min(1, (ahoraMs - inicio) / duracionMs);
+    // avance en TIEMPO de viaje: el vehículo va más lento donde la vía es lenta
+    const km = kmEnSegundos(q * R.s[R.s.length - 1]);
+    S.progreso = km;
+    const t = moverVehiculo(km);
+    // rumbo: dirección media de los próximos 2 km, suavizada
+    const objetivo = rumbo(puntoEnKm(Math.max(0, km - 0.6)), puntoEnKm(Math.min(total, km + 2.2)));
+    rumboSuave = (rumboSuave + angDif(rumboSuave, objetivo) * 0.035 + 360) % 360;
+    // altitud: la cámara se eleva al acercarse a cada hito para dar contexto
+    const dh = Math.min(...R.hitos.map((h) => Math.abs(h.km - km)));
+    const zObj = (MOVIL ? 11.7 : 12.35) - 0.75 * Math.exp(-(dh ** 2) / (2 * 2.2 ** 2));
+    zoomSuave += (zObj - zoomSuave) * 0.04;
+    const delante = puntoEnKm(Math.min(total, km + 0.9));
+    centro = [centro[0] + (delante[0] - centro[0]) * 0.08, centro[1] + (delante[1] - centro[1]) * 0.08];
+    m.jumpTo({ center: centro, bearing: rumboSuave, pitch: 66, zoom: zoomSuave });
+    pintarCampo(horaDe(t));
+    if (Math.abs(km - ultimoPintado) > 0.35) { pintarRuta(1, km); ultimoPintado = km; }
+    pintarLectura(t);
+    if (q < 1) S.anim = requestAnimationFrame(paso);
+    else { detener(); m.easeTo({ ...VISTAS.general(), duration: 3500 }); }
+  };
+  S.anim = requestAnimationFrame(paso);
+}
+
+function detener() {
+  if (!S.recorriendo) return;
+  S.recorriendo = false;
+  cancelAnimationFrame(S.anim); clearTimeout(S.anim);
+  botonRecorrer(false);
+}
+function botonRecorrer(on) {
+  $("#b-recorrer").setAttribute("aria-pressed", String(on));
+  $("#b-recorrer-texto").textContent = on ? "Pausa" : "Recorrer";
+}
+
+// ------------------------------------------------------------------ controles e información
+
+function controles() {
+  $("#b-recorrer").addEventListener("click", recorrer);
+  document.querySelectorAll("[data-vista]").forEach((b) => b.addEventListener("click", () => {
+    detener();
+    const v = VISTAS[b.dataset.vista]();
+    if (MOV) S.mapa.flyTo({ ...v, duration: 2600, essential: true }); else S.mapa.jumpTo(v);
+  }));
+  let pendiente = null;
+  $("#hora").addEventListener("input", (ev) => {
+    if (pendiente) cancelAnimationFrame(pendiente);
+    pendiente = requestAnimationFrame(() => { pendiente = null; elegirSalida(+ev.target.value); });
+  });
+  const info = $("#info"), b = $("#b-info");
+  const abrir = (on) => { info.hidden = !on; b.setAttribute("aria-expanded", String(on)); };
+  b.addEventListener("click", () => abrir(info.hidden));
+  $("#info-cerrar").addEventListener("click", () => abrir(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") abrir(false); });
+  pintarInfo();
+}
+
+function pintarInfo() {
+  const R = S.ruta, L = S.lluvia;
+  const ests = S.estaciones.map(({ e, d }) => `<li>${esc(e.nombre)} (${esc(e.codigo)}, ${esc(e.propietario || "")}), a ${num(d)} km de la vía</li>`).join("");
+  $("#info-cuerpo").innerHTML = `
+    <h3>Relieve</h3><p>Terrain Tiles de Mapzen en AWS (base SRTM de ~30 m en Ecuador), sin exagerar la altura. Suaviza quebradas estrechas.</p>
+    <h3>Ruta</h3><p>${esc(R.fuente)}, consultada el ${esc(R.consultado.slice(0, 10))}. ${num(R.distancia_km)} km y ${Math.round(R.s[R.s.length - 1] / 60)} min sin tráfico ni paradas (suma de tiempos por tramo de OSRM). ${esc(R.licencia)}.</p>
+    <h3>Lluvia prevista</h3><p>${esc(L.modelo)}, producto ${esc(L.producto)}, ${esc(L.rejilla)}. ${esc(L.seleccion)}. Corrida iniciada ${esc(L.corrida_inicio_utc || "sin dato")} (UTC). La trayectoria toma la celda que contiene cada punto de la vía, a la hora en que pasarías.</p>
+    <h3>Lluvia medida</h3><ul>${ests || "<li>Ninguna estación a menos de 7 km de la vía.</li>"}</ul><p>Visor del INAMHI, sin control de calidad publicado. Mover el tiempo no cambia las mediciones.</p>
+    <h3>Ambientación</h3><p>Cielo, neblina y color de luz son de representación, no datos. No hay nubes porque el sistema no tiene datos de nubosidad del corredor.</p>
+    <h3>Límites</h3><ul><li>Una celda de ~9 km no indica la lluvia exacta en un punto de la carretera.</li><li>No evalúa deslaves ni el estado de la vía: consulta el <a href="https://www.ecu911.gob.ec/consulta-de-vias/" target="_blank" rel="noopener">ECU 911</a>.</li><li>Prototipo: el fondo satelital es de uso no comercial.</li></ul>`;
+}
+
+// ------------------------------------------------------------------ rendimiento
+
+function medirFps() {
+  let n = 0, t0 = performance.now();
+  const tic = (t) => {
+    n++;
+    if (t - t0 >= 1000) { S.fps.push(Math.round((n * 1000) / (t - t0))); if (S.fps.length > 120) S.fps.shift(); n = 0; t0 = t; }
+    requestAnimationFrame(tic);
+  };
+  requestAnimationFrame(tic);
+  window.__corredor = S;
+}
+
+iniciar();
