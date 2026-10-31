@@ -22,7 +22,7 @@ self.addEventListener("activate", (ev) => {
 async function redPrimero(req, cache) {
   const c = await caches.open(cache);
   try {
-    const r = await fetch(req);
+    const r = await fetch(req, { cache: "no-cache" }); // revalida con el servidor: una versión nueva llega al abrir
     if (r.ok) c.put(req, r.clone());
     return r;
   } catch (e) {

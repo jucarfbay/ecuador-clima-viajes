@@ -204,6 +204,8 @@ class TestPipeline(unittest.TestCase):
                 run.main(["--salida", f"{tmp}/data", "--archivo", f"{tmp}/arch", "--previo-archivo", f"{tmp}/prev"])
             estado = json.loads(Path(f"{tmp}/data/estado.json").read_text())
             self.assertEqual(estado["fuentes"]["pronostico"]["accion"], "reutilizado")
+            pron = json.loads(Path(f"{tmp}/data/pronostico.json").read_text())
+            self.assertIn("vias", pron["rutas"][0])  # la ruta reutilizada lleva la configuración actual
             self.assertEqual(estado["fuentes"]["calor"]["accion"], "reutilizado")
             self.assertFalse(list(Path(f"{tmp}/arch").glob("pronostico_*.json.gz")))
 

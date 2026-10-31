@@ -314,6 +314,9 @@ def main(argv=None):
     prev_calor = mas_reciente(leer_previo(a.previo, "calor.json"), previo_archivado(a.previo_archivo, "calor"))
     vigente = bool(prev_pron) and not a.forzar_pronostico and edad_h(prev_pron, ahora) < a.vigencia_h
     if vigente:
+        # Rutas y lugares salen siempre de la configuración actual (un cambio en config/ no espera al recálculo).
+        prev_pron["rutas"] = cfg.get("rutas", [])
+        prev_pron["lugares"] = cfg.get("lugares", [])
         escribir(salida / "pronostico.json", prev_pron)
         estado["fuentes"]["pronostico"] = {"generado": prev_pron["generado"], "accion": "reutilizado"}
     else:
