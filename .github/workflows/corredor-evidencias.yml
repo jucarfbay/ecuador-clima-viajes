@@ -8,6 +8,9 @@ on:
       ref:
         description: "Rama o commit a capturar SIN publicarlo (vacío = página publicada)"
         default: ""
+      ref_antes:
+        description: "Commit ANTES para la comparación (mismos datos y encuadres); vacío = sin comparación"
+        default: ""
       url:
         description: "Página publicada a capturar (si ref está vacío)"
         default: "https://jucarfbay.github.io/ecuador-clima-viajes/corredor/"
@@ -18,11 +21,16 @@ permissions:
 jobs:
   evidencias:
     runs-on: ubuntu-24.04   # Playwright 1.55 aún no instala Chromium en ubuntu-latest (26.04)
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/checkout@v4
+        if: ${{ inputs.ref_antes != '' }}
+        with:
+          ref: ${{ inputs.ref_antes }}
+          path: antes
       - name: Servir la versión a revisar (con los datos publicados)
         id: sitio
         run: |
@@ -32,6 +40,13 @@ jobs:
               curl -fsS "https://jucarfbay.github.io/ecuador-clima-viajes/data/$f" -o "site/data/$f" || echo "sin $f"
             done
             (cd site && nohup python3 -m http.server 8123 > /tmp/http.log 2>&1 &)
+            if [ -d antes/site ]; then
+              # la versión ANTES lee exactamente los mismos archivos de datos
+              mkdir -p antes/site/data && cp site/data/*.json antes/site/data/
+              (cd antes/site && nohup python3 -m http.server 8124 > /tmp/http-antes.log 2>&1 &)
+              echo "url_antes=http://localhost:8124/corredor/" >> "$GITHUB_OUTPUT"
+              mv antes /tmp/antes-src 2>/dev/null || true
+            fi
             sleep 2
             echo "url=http://localhost:8123/corredor/" >> "$GITHUB_OUTPUT"
           else
@@ -50,22 +65,18 @@ jobs:
       - name: Capturar
         run: |
           cp tools/evidencias_corredor.mjs /tmp/pw/
-          node /tmp/pw/evidencias_corredor.mjs "${{ steps.sitio.outputs.url }}" "$GITHUB_WORKSPACE/evidencias" > evidencias/captura.txt 2>&1 || echo "La captura terminó con error; se publica lo que haya"
+          node /tmp/pw/evidencias_corredor.mjs "${{ steps.sitio.outputs.url }}" "$GITHUB_WORKSPACE/evidencias" "${{ steps.sitio.outputs.url_antes }}" > evidencias/captura.txt 2>&1 || echo "La captura terminó con error; se publica lo que haya"
           tail -30 evidencias/captura.txt
       - name: Video a MP4
         run: |
           shopt -s nullglob
-          # Playwright nombra los videos al azar: el más antiguo es el recorrido y el siguiente el control temporal.
-          mapfile -t f < <(ls -tr evidencias/video-tmp/*.webm 2>/dev/null)
-          nombres=(corredor-recorrido-1280 corredor-control-temporal-1280)
-          if [ ${#f[@]} -gt 0 ]; then
+          for d in evidencias/video-tmp/*/; do
+            n=$(basename "$d"); f=("$d"*.webm)
+            [ ${#f[@]} -gt 0 ] || continue
             command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null; }
-            for i in "${!f[@]}"; do
-              n="${nombres[$i]:-video-$i}"
-              ffmpeg -y -loglevel error -i "${f[$i]}" -vf "fps=30" -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "evidencias/$n.mp4" \
-                || cp "${f[$i]}" "evidencias/$n.webm"
-            done
-          fi
+            ffmpeg -y -loglevel error -i "${f[0]}" -vf "fps=30" -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p "evidencias/despues-video-$n.mp4" \
+              || cp "${f[0]}" "evidencias/despues-video-$n.webm"
+          done
           rm -rf evidencias/video-tmp
           ls -la evidencias
       - name: Publicar en la rama evidencias
