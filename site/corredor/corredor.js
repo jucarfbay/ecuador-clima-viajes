@@ -206,7 +206,8 @@ async function iniciar() {
 
   const mapa = new ML.Map({
     container: "escena", style: estilo(), ...VISTAS.intro(), maxPitch: 78, attributionControl: { compact: MOVIL },
-    canvasContextAttributes: { antialias: true }, fadeDuration: 0,
+    // ?captura=1 conserva el búfer de dibujo para poder capturar la escena desde herramientas de revisión
+    canvasContextAttributes: { antialias: true, preserveDrawingBuffer: new URLSearchParams(location.search).has("captura") }, fadeDuration: 0,
   });
   S.mapa = mapa;
   window.__mapa = mapa;
