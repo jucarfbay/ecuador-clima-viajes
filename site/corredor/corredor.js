@@ -384,7 +384,7 @@ function pintarCampo(i) {
 
 // ------------------------------------------------------------------ luz según la hora (astronomía, no meteorología)
 
-/** Sol aproximado en el corredor (~1,2° S) a fines de octubre: sale ~06:00 por el este-sureste, se pone ~18:15 por el
+/** Sol aproximado en el corredor (0,3° a 1,4° S; la diferencia de latitud no cambia el sombreado) a fines de octubre: sale ~06:00 por el este-sureste, se pone ~18:15 por el
  *  oeste-suroeste. Solo orienta el sombreado y el tono; no representa nubosidad. */
 function sol(tMs) {
   const d = local(tMs), h = d.getUTCHours() + d.getUTCMinutes() / 60;
