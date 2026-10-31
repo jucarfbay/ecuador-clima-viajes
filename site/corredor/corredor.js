@@ -532,7 +532,14 @@ function enfocarEstacion(e, mk, pop) {
   detener();
   const m = S.mapa;
   // En el teléfono el instrumento es una hoja inferior que reemplaza a la banda mientras está abierta (no se tapan).
-  const abrir = MOVIL ? () => abrirHoja(pop.getElement()?.innerHTML || pop._content?.innerHTML || "", e) : () => { pop.setLngLat([e.lon, e.lat]).addTo(m); };
+  const abrir = MOVIL ? () => abrirHoja("", e) : () => {
+    pop.setLngLat([e.lon, e.lat]).addTo(m);
+    // si el instrumento no cabe bajo el título, la cámara baja lo justo para mostrarlo entero
+    requestAnimationFrame(() => {
+      const r = pop.getElement()?.getBoundingClientRect();
+      if (r && r.top < 80) m.panBy([0, -(80 - r.top)], { duration: MOV ? 400 : 0 });
+    });
+  };
   const destino = { center: [e.lon, e.lat], zoom: MOVIL ? 11.4 : 12.2, pitch: 58, bearing: m.getBearing(), offset: [0, MOVIL ? -140 : Math.round(innerHeight * 0.2)] };
   if (MOV) { m.once("moveend", abrir); m.flyTo({ ...destino, duration: 1800, essential: true }); } else { m.jumpTo(destino); abrir(); }
 }

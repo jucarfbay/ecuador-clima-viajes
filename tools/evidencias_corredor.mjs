@@ -127,7 +127,7 @@ for (const [tag, ancho, alto, escala] of [["1440", 1440, 900, 1], ["390", 390, 8
     await salida(p, 19); await camaraFija(p, ancho); await listo(p, 300);
     const est = await p.$(".estacion");
     await est.click();
-    await p.waitForTimeout(2600); await listo(p, 300);
+    await p.waitForTimeout(4500); await listo(p, 800);
     const texto = await p.evaluate(() => document.querySelector(".instrumento")?.innerText || "sin instrumento");
     log(`[estacion-${tag}] instrumento: ${texto.replace(/\s+/g, " ").slice(0, 700)}`);
     log(`[estacion-${tag}] ¿instrumento visible y sin tapar? ${await p.evaluate(() => {
@@ -167,8 +167,8 @@ await sesion("teclado", DESPUES, 1440, 900, 1, async (p) => {
   const k0 = await p.evaluate(() => window.__corredor.k);
   let llega = false;
   for (let i = 0; i < 12 && !llega; i++) { await p.keyboard.press("Tab"); llega = await p.evaluate(() => document.activeElement?.id === "hora"); }
-  for (let i = 0; i < 3; i++) await p.keyboard.press("ArrowRight");
-  await p.waitForTimeout(500);
+  for (let i = 0; i < 3; i++) { await p.keyboard.press("ArrowRight"); await p.waitForTimeout(400); }
+  await p.waitForFunction((k) => window.__corredor.k !== k, k0, { timeout: 20000 }).catch(() => {});
   const k1 = await p.evaluate(() => window.__corredor.k);
   log(`[teclado] línea de tiempo alcanzable con Tab: ${llega}; flecha derecha ×3: salida ${k0} → ${k1}`);
   await p.screenshot({ path: `${OUT}/despues-1440-teclado.png` });
