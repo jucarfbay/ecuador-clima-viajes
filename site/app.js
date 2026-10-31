@@ -62,6 +62,30 @@ async function iniciar() {
   if (E.lugar === "ubicacion" && !E.ubic) E.lugar = E.favs.find((x) => x !== "ubicacion") || "quito"; // no pedir permiso al abrir
   E.pintados.clear();
   prepararNavegacion();
+  actualizarVias();
+}
+
+// Estado de vías EN VIVO desde el teléfono: el servicio del ECU 911 no responde a GitHub (fuera de Ecuador),
+// pero sí al navegador. Si falla (sin red o fuera del país), queda la copia que dejó el proceso automático.
+async function actualizarVias() {
+  E.viasPendiente = true;
+  const ctl = new AbortController();
+  const corte = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const r = await fetch(Lg.ECU911_VIAS, { signal: ctl.signal, cache: "no-store" });
+    if (!r.ok) throw new Error(String(r.status));
+    const vias = Lg.normalizarViasEcu911(await r.json());
+    E.vias = { generado: new Date().toISOString(), vivo: true, vias };
+  } catch {
+    if (E.vias) E.vias.vivo = false;
+  } finally {
+    clearTimeout(corte);
+    E.viasPendiente = false;
+  }
+  E.viasProv = null;
+  pintarFrescura();
+  if (E.pintados.has("viaje") && E.viaje.ruta) pintarViasRuta(E.viaje.ruta);
+  if (E.pintados.has("provincias")) { E.pintados.delete("provincias"); if (E.panel === "provincias") mostrar("provincias", { conservarScroll: true }); }
 }
 
 function mostrarErrorCarga() {
@@ -133,7 +157,7 @@ function pintarFrescura() {
   const b = $("#frescura");
   if (!E.pron) { b.textContent = "Sin datos"; b.className = "frescura sin-datos"; return; }
   const f = Lg.frescura(E.pron, E.obs, E.calor);
-  if (E.vias?.generado) f.items.push({ clave: "vias", texto: `Estado de vías del ECU 911 consultado a las ${Lg.horaEcuador(E.vias.generado)}` });
+  if (E.vias?.generado) f.items.push({ clave: "vias", texto: `Estado de vías del ECU 911 consultado ${E.vias.vivo ? "en vivo" : "por el proceso automático"} a las ${Lg.horaEcuador(E.vias.generado)}` });
   b.textContent = E.estado?.demo ? "Datos de demostración" : f.corto;
   b.className = "frescura" + (f.atrasado || E.estado?.demo ? " atrasado" : "");
   const panel = $("#frescura-panel");
@@ -545,12 +569,14 @@ function pintarViasRuta(ruta) {
   const cfg = ruta.vias;
   let html = `<h2 class="titulo-bloque">Estado de las vías</h2>`;
   if (!E.vias || !Array.isArray(E.vias.vias)) {
-    html += `<p class="aviso-vias">No se pudo leer el estado de las vías. Revísalo en la ${enlaceEcu} antes de salir.</p>`;
+    html += E.viasPendiente
+      ? `<p class="nota" role="status">Consultando el estado de las vías en el ECU 911…</p>`
+      : `<p class="aviso-vias">No se pudo leer el estado de las vías. Revísalo en la ${enlaceEcu} antes de salir.</p>`;
   } else {
     const edad = Date.now() - new Date(E.vias.generado).getTime();
     const { enRuta, enProvincias } = Lg.viasDeRuta(E.vias.vias, cfg);
     const provs = (cfg?.provincias || []).map((x) => Lg.titulo(x)).join(", ");
-    html += `<p class="nota">Según el ECU 911 (incluye reportes del MIT y la SNGR), consultado a las ${Lg.horaEcuador(E.vias.generado)}.</p>`;
+    html += `<p class="nota">Según el ECU 911 (incluye reportes del MIT y la SNGR), consultado ${E.vias.vivo ? "desde tu teléfono " : ""}a las ${Lg.horaEcuador(E.vias.generado)}.</p>`;
     if (edad > 3 * Lg.H) html += `<p class="aviso-vias">Este dato tiene ${Lg.hace(edad).replace("hace ", "")}. Confírmalo en la ${enlaceEcu}.</p>`;
     if (!cfg) {
       html += `<p>Esta ruta todavía no tiene configuradas sus vías. Revisa la ${enlaceEcu}.</p>`;

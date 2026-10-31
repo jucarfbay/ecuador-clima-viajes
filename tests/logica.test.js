@@ -177,3 +177,14 @@ test("vías: gravedad, texto legible y agrupación por provincia", () => {
   const g = L.viasPorProvincia([via("A", "LOS RIOS"), via("B", "Los Ríos")]);
   assert.equal(g["LOS RIOS"].length, 2);
 });
+
+test("vías: la respuesta del ECU 911 se normaliza igual que en Python", () => {
+  const resp = { total: 1, code: 200, data: [{ id: "x", descripcion: " AMBATO - BAÑOS ", observaciones: "DERRUMBE EN EL KM 5",
+    modified: "2026-10-29 06:11:10", GroupDetail: { nombre: "ARTERIAL" }, EstadoActual: { id: 595, nombre: "CERRADA" },
+    Provincia: { descripcion: "TUNGURAHUA" }, Canton: { descripcion: "BAÑOS DE AGUA SANTA" },
+    DetalleViaAlterna: [{ Via: { descripcion: "PATATE - BAÑOS" } }, { Via: null }] }] };
+  assert.deepEqual(L.normalizarViasEcu911(resp), [{ id: "x", via: "AMBATO - BAÑOS", estado: "CERRADA", categoria: "ARTERIAL",
+    provincia: "TUNGURAHUA", canton: "BAÑOS DE AGUA SANTA", observaciones: "DERRUMBE EN EL KM 5", alternas: ["PATATE - BAÑOS"],
+    modificado: "2026-10-29T06:11-05:00" }]);
+  assert.match(L.ECU911_VIAS, /EstadoActual-id=593/);
+});

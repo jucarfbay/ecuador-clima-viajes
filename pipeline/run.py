@@ -360,7 +360,7 @@ def main(argv=None):
     # Estado de las vías (ECU 911), cada ejecución.
     prev_vias = leer_previo(a.previo, "vias.json")
     try:
-        vs = vias_ecu911(http)
+        vs = vias_ecu911(Http(reintentos=1, timeout=20))  # desde fuera de Ecuador suele no responder
         escribir(salida / "vias.json", {
             "generado": ahora.isoformat(timespec="minutes"),
             "fuente": "ECU 911, consulta de vías (consolida reportes del ECU 911, el MIT y la SNGR)",

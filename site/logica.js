@@ -336,6 +336,24 @@
     return { enRuta: enRuta.sort(orden), enProvincias: enProvincias.sort(orden) };
   }
 
+  const ECU911_VIAS = "https://ecu911.gob.ec/Services/WSVias/ViasWeb.php?estado=A&and%3A%3C%3E%3AEstadoActual-id=593&order=Provincia-descripcion&limit=200&start=0";
+
+  /** Respuesta del servicio del ECU 911 -> mismo formato que pipeline/fuentes.py:vias_ecu911. */
+  function normalizarViasEcu911(resp) {
+    const fecha = (t) => (t ? String(t).trim().slice(0, 16).replace(" ", "T") + "-05:00" : null);
+    return ((resp && resp.data) || []).map((v) => ({
+      id: v.id,
+      via: String(v.descripcion || "").trim(),
+      estado: String((v.EstadoActual || {}).nombre || "").trim(),
+      categoria: String((v.GroupDetail || {}).nombre || "").trim() || null,
+      provincia: String((v.Provincia || {}).descripcion || "").trim(),
+      canton: String((v.Canton || {}).descripcion || "").trim() || null,
+      observaciones: String(v.observaciones || "").trim(),
+      alternas: (v.DetalleViaAlterna || []).filter((d) => d.Via && d.Via.descripcion).map((d) => d.Via.descripcion.trim()),
+      modificado: fecha(v.modified),
+    }));
+  }
+
   /** Novedades por provincia (nombre normalizado -> vías), para la pestaña Provincias. */
   function viasPorProvincia(vias) {
     const out = {};
@@ -357,7 +375,7 @@
   }
 
   return {
-    normal, palabras, gravedadVia, viasDeRuta, viasPorProvincia, oracion, titulo,
+    ECU911_VIAS, normalizarViasEcu911, normal, palabras, gravedadVia, viasDeRuta, viasPorProvincia, oracion, titulo,
     H, CLASES, DIAS, MESES, ECUADOR,
     parseLocal, fmtLocal, fechaISO, hora, ahoraLocal, offsetDe, diaRelativo, diaCorto, diaLargo,
     num, deCada10, hace,
