@@ -18,7 +18,8 @@ OSRM = "https://router.project-osrm.org/route/v1/driving/"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 # Origen: San Rafael (Valle de los Chillos, cantón Rumiñahui). No es un punto del sistema de alertas: se geocodifica con
 # OpenStreetMap (Nominatim) y se guarda la coordenada usada, con su fuente.
-ORIGEN = {"id": "san-rafael", "nombre": "San Rafael", "consulta": "San Rafael, Rumiñahui, Pichincha, Ecuador",
+ORIGEN = {"id": "san-rafael", "nombre": "San Rafael",
+          "consultas": ["San Rafael, Sangolquí, Ecuador", "San Rafael, Rumiñahui, Pichincha, Ecuador"],
           # El ensamble ECMWF por hora solo existe para las localidades de la ruta del sistema; la más cercana es Quito.
           "serie_ensamble": "quito"}
 # Paradas que fijan el camino (la ruta pasa por ellas) y pasos de referencia (se ubican en la vía, sin desviarla).
@@ -140,17 +141,22 @@ def geocodificar(o: dict) -> dict:
     """Coordenada del origen según OpenStreetMap (Nominatim), con la fuente para citarla. Se prefiere el lugar poblado
     (parroquia, barrio) o su límite administrativo frente a un comercio que lleve el mismo nombre."""
     import urllib.parse
-    q = urllib.parse.urlencode({"q": o["consulta"], "format": "jsonv2", "limit": 10, "countrycodes": "ec"})
-    req = urllib.request.Request(f"{NOMINATIM}?{q}", headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        res = json.loads(resp.read().decode("utf-8"))
+    import time
+    res = []
+    for consulta in o["consultas"]:
+        q = urllib.parse.urlencode({"q": consulta, "format": "jsonv2", "limit": 10, "countrycodes": "ec"})
+        req = urllib.request.Request(f"{NOMINATIM}?{q}", headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            res += [{**x, "_consulta": consulta} for x in json.loads(resp.read().decode("utf-8"))]
+        time.sleep(1.1)  # política de uso de Nominatim: máximo una consulta por segundo
     for x in res:  # visible en las anotaciones del flujo
         print(f"::notice title=Nominatim::{x.get('category')}/{x.get('type')} {x['lat']},{x['lon']} {x.get('display_name')}")
     if not res:
-        raise SystemExit(f"Nominatim no encontró «{o['consulta']}»")
+        raise SystemExit(f"Nominatim no encontró {o['consultas']}")
     orden = lambda x: (0 if x.get("category") == "place" else 1 if x.get("category") == "boundary" else 2)  # noqa: E731
     r = sorted(res, key=orden)[0]  # sorted es estable: dentro de cada grupo, el orden de relevancia de Nominatim
     print(f"::notice title=Origen::{r.get('category')}/{r.get('type')} {r['lat']},{r['lon']} {r.get('display_name')}")
+    o = {**o, "consulta": r["_consulta"]}
     return {**o, "lat": round(float(r["lat"]), 5), "lon": round(float(r["lon"]), 5),
             "geocodificado": {"fuente": "OpenStreetMap Nominatim", "nombre": r.get("display_name"),
                               "osm": f"{r.get('osm_type')}/{r.get('osm_id')}", "tipo": f"{r.get('category')}/{r.get('type')}"}}
