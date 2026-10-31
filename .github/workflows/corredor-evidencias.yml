@@ -5,8 +5,11 @@ name: "Corredor: evidencias"
 on:
   workflow_dispatch:
     inputs:
+      ref:
+        description: "Rama o commit a capturar SIN publicarlo (vacío = página publicada)"
+        default: ""
       url:
-        description: "Página a capturar"
+        description: "Página publicada a capturar (si ref está vacío)"
         default: "https://jucarfbay.github.io/ecuador-clima-viajes/corredor/"
 
 permissions:
@@ -18,6 +21,22 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - name: Servir la versión a revisar (con los datos publicados)
+        id: sitio
+        run: |
+          if [ -n "${{ inputs.ref }}" ]; then
+            mkdir -p site/data
+            for f in corredor_lluvia.json estaciones.json pronostico.json vias.json estado.json; do
+              curl -fsS "https://jucarfbay.github.io/ecuador-clima-viajes/data/$f" -o "site/data/$f" || echo "sin $f"
+            done
+            (cd site && nohup python3 -m http.server 8123 > /tmp/http.log 2>&1 &)
+            sleep 2
+            echo "url=http://localhost:8123/corredor/" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=${{ inputs.url }}" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -31,7 +50,7 @@ jobs:
       - name: Capturar
         run: |
           cp tools/evidencias_corredor.mjs /tmp/pw/
-          node /tmp/pw/evidencias_corredor.mjs "${{ inputs.url }}" "$GITHUB_WORKSPACE/evidencias" > evidencias/captura.txt 2>&1 || echo "La captura terminó con error; se publica lo que haya"
+          node /tmp/pw/evidencias_corredor.mjs "${{ steps.sitio.outputs.url }}" "$GITHUB_WORKSPACE/evidencias" > evidencias/captura.txt 2>&1 || echo "La captura terminó con error; se publica lo que haya"
           tail -30 evidencias/captura.txt
       - name: Video a MP4
         run: |
@@ -52,6 +71,6 @@ jobs:
           git checkout --orphan evidencias-nueva
           git rm -rfq . && git clean -fdxq
           cp -r /tmp/evidencias/* .
-          echo "Evidencias de ${{ inputs.url }} generadas el $(date -u +%FT%TZ) desde ${GITHUB_SHA::7}" > LEEME.txt
+          echo "Evidencias de ${{ inputs.ref || inputs.url }} generadas el $(date -u +%FT%TZ) desde ${GITHUB_SHA::7}" > LEEME.txt
           git add -A && git commit -qm "Evidencias del corredor ${GITHUB_SHA::7}"
           git push -f origin evidencias-nueva:evidencias
