@@ -23,6 +23,7 @@ const ESCALA = [
   [2.5, [47, 95, 184]], [5, [107, 63, 179]], [10, [142, 44, 158]],
 ];
 const CORREDOR_KM = 14; // el velo de lluvia se muestra solo en celdas cuyo centro está a esta distancia de la vía
+const PITCH_GENERAL = MOVIL ? 54 : 60; // inclinación del panorama: el relieve se lee sin aplastar el extremo lejano
 const FILAS = 36; // filas de la matriz distancia × salida (~4,5 km cada una)
 const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -216,12 +217,43 @@ function estilo() {
 }
 
 const VISTAS = {
-  // Panorama: desde el valle de Machachi hacia el sur, por la avenida de los volcanes: el Cotopaxi a la izquierda,
-  // el valle de Latacunga y Ambato al fondo y el Tungurahua cerrando el corredor.
-  general: () => ({ center: [-78.57, -0.86], zoom: MOVIL ? 9.05 : 9.75, pitch: 72, bearing: 172 }),
-  cenital: () => ({ center: [-78.52, -0.86], zoom: MOVIL ? 8.25 : 8.85, pitch: 0, bearing: 0 }),
-  intro: () => ({ center: [-78.5, -0.5], zoom: MOVIL ? 8.0 : 8.6, pitch: 50, bearing: 176 }),
+  // Panorama: desde detrás de San Rafael hacia el sur, por la avenida de los volcanes (el Cotopaxi a un lado, el
+  // Tungurahua al fondo). El encuadre se calcula para que la ruta ENTERA quepa entre el título y la banda inferior en
+  // cada pantalla (ver encuadrar); los valores fijos son solo el respaldo antes de que exista el mapa.
+  general: () => S.encuadres?.general || { center: [-78.55, -0.85], zoom: MOVIL ? 8.6 : 9.2, pitch: PITCH_GENERAL, bearing: 178 },
+  cenital: () => S.encuadres?.cenital || { center: [-78.53, -0.85], zoom: MOVIL ? 8.0 : 8.7, pitch: 0, bearing: 0 },
+  intro: () => ({ center: [-78.47, -0.42], zoom: MOVIL ? 8.0 : 8.6, pitch: 50, bearing: 176 }),
 };
+
+/** Cámara que encuadra la ruta completa (con lugar para sus etiquetas) en la zona libre de la pantalla: entre el título y
+ *  los mandos arriba y la banda de la hora abajo. Itera proyectando la ruta con la inclinación y el rumbo pedidos. */
+function encuadrar({ pitch, bearing }) {
+  const m = S.mapa, R = S.ruta, el = m.getContainer();
+  const previo = { center: m.getCenter(), zoom: m.getZoom(), pitch: m.getPitch(), bearing: m.getBearing() };
+  const pts = R.coords.filter((_, i) => i % 12 === 0).concat([R.coords[R.coords.length - 1]]);
+  const lons = pts.map((p) => p[0]), lats = pts.map((p) => p[1]);
+  const arriba = Math.max($(".titulo").getBoundingClientRect().bottom, $(".mandos").getBoundingClientRect().bottom);
+  // margen para las etiquetas: nombre y hora sobre el punto, y a los lados
+  const zona = { left: MOVIL ? 70 : 140, right: el.clientWidth - (MOVIL ? 70 : 140), top: arriba + 64, bottom: $(".tiempo").getBoundingClientRect().top - 28 };
+  let cam = { center: [(Math.min(...lons) + Math.max(...lons)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2], zoom: 9, pitch, bearing };
+  for (let i = 0; i < 8; i++) {
+    m.jumpTo(cam);
+    const ps = pts.map((p) => m.project(p));
+    const x0 = Math.min(...ps.map((p) => p.x)), x1 = Math.max(...ps.map((p) => p.x));
+    const y0 = Math.min(...ps.map((p) => p.y)), y1 = Math.max(...ps.map((p) => p.y));
+    const esc = Math.min((zona.right - zona.left) / Math.max(1, x1 - x0), (zona.bottom - zona.top) / Math.max(1, y1 - y0));
+    const dx = (x0 + x1) / 2 - (zona.left + zona.right) / 2, dy = (y0 + y1) / 2 - (zona.top + zona.bottom) / 2;
+    const c = m.unproject([el.clientWidth / 2 + dx, el.clientHeight / 2 + dy]);
+    cam = { ...cam, center: [c.lng, c.lat], zoom: cam.zoom + Math.log2(esc) * 0.85 };
+    if (Math.abs(Math.log2(esc)) < 0.015 && Math.hypot(dx, dy) < 3) break;
+  }
+  m.jumpTo(previo);
+  return cam;
+}
+function calcularEncuadres() {
+  S.encuadres = { general: encuadrar({ pitch: PITCH_GENERAL, bearing: 178 }), cenital: encuadrar({ pitch: 0, bearing: 0 }) };
+}
+window.__vistaGeneral = () => VISTAS.general();
 
 async function iniciar() {
   try {
@@ -256,6 +288,7 @@ async function iniciar() {
   const arrancar = () => {
     if (arrancado) return;
     arrancado = true;
+    calcularEncuadres();
     capas();
     marcadores();
     estaciones();
@@ -279,6 +312,8 @@ async function iniciar() {
   let pendiente = 0;
   mapa.on("render", () => { const ahora = performance.now(); if (ahora - pendiente > 160) { pendiente = ahora; acomodar(); } });
   mapa.on("moveend", acomodar);
+  let tRedim = 0;
+  mapa.on("resize", () => { clearTimeout(tRedim); tRedim = setTimeout(() => { if (arrancado && !S.recorriendo && !S.mapa.isMoving()) calcularEncuadres(); }, 300); });
 }
 
 /** Aviso único y discreto si el fondo o el relieve no cargan: los datos siguen siendo válidos. */
@@ -439,9 +474,14 @@ function acomodar() {
   const puestos = [], ancho = innerWidth, alto = innerHeight;
   // la interfaz fija también ocupa lugar: título, mandos de cámara, banda de decisión y avisos
   for (const sel of [".tiempo", ".titulo", ".mandos", "#aviso:not([hidden])"]) { const el = $(sel); if (el) puestos.push(el.getBoundingClientRect()); }
-  const choca = (a) => puestos.some((b) => a.left < b.right + 4 && a.right + 4 > b.left && a.top < b.bottom + 3 && a.bottom + 3 > b.top);
+  // Los puntos de todas las marcas (estaciones, hitos, vehículo) también son obstáculos para las etiquetas ajenas.
+  const puntos = S.etiquetas.filter((e) => !e.el.hidden).map((e) => ({ e, r: e.el.getBoundingClientRect() }));
+  let actual = null;
+  const sobrePunto = (a) => puntos.some(({ e, r }) => e !== actual && a.left < r.right && a.right > r.left && a.top < r.bottom && a.bottom > r.top);
+  const choca = (a) => sobrePunto(a) || puestos.some((b) => a.left < b.right + 4 && a.right + 4 > b.left && a.top < b.bottom + 3 && a.bottom + 3 > b.top);
   const orden = [...S.etiquetas].sort((a, b) => a.prioridad - b.prioridad);
   for (const e of orden) {
+    actual = e;
     const etq = e.el.querySelector(".etq");
     e.el.classList.remove("plegada", "sin-paso", ...e.variantes);
     if (e.el.hidden || getComputedStyle(etq).display === "none") continue;
@@ -487,7 +527,7 @@ function marcadores() {
   R.hitos.forEach((h, i) => {
     const extremo = i === 0 || i === ultimo;
     S.marcadores[h.id] = marcador(`<span class="nombre">${esc(h.nombre)}</span><span class="paso"></span>`,
-      [h.en_via.lon, h.en_via.lat], `hito${extremo ? " extremo" : ""}`, { prioridad: extremo ? 1 : 2, plegable: false });
+      [h.en_via.lon, h.en_via.lat], `hito${extremo ? " extremo" : ""}`, { prioridad: extremo ? 1 : 2, plegable: !extremo });
   });
   S.vehiculo = marcador(`<span class="hora-v"></span>`, R.coords[0], "vehiculo", { prioridad: 0, variantes: ["der", "izq", "arriba"], plegable: false });
   S.pico = marcador(`<span class="pico-v"></span>`, R.coords[0], "pico", { prioridad: 3, variantes: ["der", "izq", "arriba"] });

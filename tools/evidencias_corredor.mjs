@@ -15,7 +15,7 @@ const nav = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-
 
 const TAMANOS = [["1920", 1920, 1080, 1], ["1440", 1440, 900, 1], ["390", 390, 844, 2], ["360", 360, 800, 2]];
 // Cámara fija común (la misma para antes y después).
-// Mismo encuadre que VISTAS.general() de corredor.js.
+// Respaldo para versiones sin __vistaGeneral (la versión actual calcula su encuadre según la pantalla).
 const CAMARA = (ancho) => ({ center: [-78.57, -0.86], zoom: ancho < 640 ? 9.05 : 9.75, pitch: 72, bearing: 172 });
 
 async function listo(p, extraMs = 1200) {
@@ -40,7 +40,7 @@ async function salida(p, hora) {
 }
 
 async function camaraFija(p, ancho) {
-  await p.evaluate((c) => { window.__corredor.recorriendo = false; window.__mapa.stop(); window.__mapa.jumpTo(c); }, CAMARA(ancho));
+  await p.evaluate((c) => { window.__corredor.recorriendo = false; window.__mapa.stop(); window.__mapa.jumpTo(window.__vistaGeneral ? window.__vistaGeneral() : c); }, CAMARA(ancho));
 }
 
 /** Pares de etiquetas visibles de marcadores DISTINTOS que se pisan (evidencia de la dimensión D). */
