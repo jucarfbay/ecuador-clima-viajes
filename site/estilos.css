@@ -145,3 +145,18 @@ td .nivel { padding: 2px 5px; }
   .tramos li { grid-template-columns: 48px 1fr; }
   .bloques { grid-template-columns: 34px repeat(8, 1fr); }
 }
+
+/* Nombres de ciudades sobre el mapa: texto claro con halo oscuro, legible sobre satélite, calles y lluvia. */
+.etiqueta-ciudad { position: relative; }
+.etiqueta-ciudad .punto {
+  position: absolute; inset: 0; border-radius: 50%; background: #ffffff; box-shadow: 0 0 0 1.5px #1d2125;
+}
+.etiqueta-ciudad.secundaria .punto { inset: 1px; }
+.etiqueta-ciudad .nombre {
+  position: absolute; top: 50%; left: 12px; transform: translateY(-50%); white-space: nowrap;
+  color: #ffffff; font-size: 12px; font-weight: 600; letter-spacing: .01em;
+  text-shadow: 0 0 2px #1d2125, 0 0 3px #1d2125, 0 1px 2px #1d2125;
+}
+.etiqueta-ciudad.izquierda .nombre { left: auto; right: 12px; }
+.etiqueta-ciudad.capital .nombre { font-size: 13px; font-weight: 700; }
+.zoom-lejos .etiqueta-ciudad.secundaria { display: none; }

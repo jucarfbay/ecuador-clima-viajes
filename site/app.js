@@ -310,6 +310,14 @@ function pintarProvincia(nombre) {
 
 // ------------------------------------------------------------------ mapa
 
+// Capitales de provincia (siempre con nombre); el resto de puntos se nombra al acercarse (zoom 9+).
+const CAPITALES = new Set(["esmeraldas", "portoviejo", "santa-elena", "guayaquil", "babahoyo", "machala", "santo-domingo",
+  "puerto-baquerizo", "tulcan", "ibarra", "quito", "latacunga", "ambato", "riobamba", "guaranda", "azogues", "cuenca",
+  "loja", "nueva-loja", "tena", "coca", "puyo", "macas", "zamora"]);
+
+// Nombres que van a la izquierda del punto para no chocar con una ciudad vecina.
+const NOMBRE_IZQUIERDA = new Set(["santo-domingo", "latacunga", "santa-elena", "salinas", "loja"]);
+
 const ESCALA_PRON = [ // mm/h -> color (azules a violeta); pronóstico
   [0.1, "rgba(158,202,225,0.45)"], [0.5, "rgba(107,174,214,0.6)"], [1, "rgba(66,146,198,0.7)"],
   [2.5, "rgba(33,113,181,0.78)"], [5, "rgba(84,39,143,0.82)"], [7.6, "rgba(122,1,119,0.88)"], [15, "rgba(73,0,106,0.92)"],
@@ -325,9 +333,29 @@ function prepararMapa() {
   const base = L.tileLayer("https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg", {
     maxZoom: 13, attribution: 'Sentinel-2 cloudless 2024 by <a href="https://s2maps.eu">EOX</a> (CC BY-NC-SA 4.0)',
   }).addTo(mapa);
-  const etiquetas = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png", {
-    maxZoom: 13, subdomains: "abcd", attribution: "© OpenStreetMap © CARTO", pane: "shadowPane",
-  }).addTo(mapa);
+  // Calles y nombres completos (OpenStreetMap). La capa de nombres de CARTO ahora exige clave.
+  const calles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 13, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  });
+  // Nombres propios de las ciudades del sistema, encima de todas las capas.
+  mapa.createPane("ciudades");
+  mapa.getPane("ciudades").style.zIndex = 640;
+  mapa.getPane("ciudades").style.pointerEvents = "none";
+  const ciudades = L.layerGroup().addTo(mapa);
+  for (const p of ESTADO.pron.puntos) {
+    const capital = CAPITALES.has(p.id);
+    L.marker([p.lat, p.lon], {
+      pane: "ciudades", interactive: false, keyboard: false,
+      icon: L.divIcon({
+        className: `etiqueta-ciudad${capital ? " capital" : " secundaria"}${NOMBRE_IZQUIERDA.has(p.id) ? " izquierda" : ""}`,
+        html: `<span class="punto" aria-hidden="true"></span><span class="nombre">${esc(p.nombre)}</span>`,
+        iconSize: [8, 8], iconAnchor: [4, 4],
+      }),
+    }).addTo(ciudades);
+  }
+  const ajustarEtiquetas = () => mapa.getContainer().classList.toggle("zoom-lejos", mapa.getZoom() < 9);
+  mapa.on("zoomend", ajustarEtiquetas);
+  ajustarEtiquetas();
   const goes = L.tileLayer("https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png", {
     maxNativeZoom: 7, maxZoom: 13, opacity: 0.85, attribution: "NASA GIBS · GOES-East",
   });
@@ -337,8 +365,8 @@ function prepararMapa() {
   const calor = L.layerGroup().addTo(mapa);
   const estaciones = L.layerGroup().addTo(mapa);
   ESTADO.capas = { calor, estaciones };
-  L.control.layers({ "Satélite (Sentinel-2)": base }, {
-    "Etiquetas": etiquetas,
+  L.control.layers({ "Satélite (Sentinel-2)": base, "Calles (OpenStreetMap)": calles }, {
+    "Nombres de ciudades": ciudades,
     "PRONÓSTICO · lluvia por hora": calor,
     "OBSERVADO · estaciones INAMHI (3 h)": estaciones,
     "Nubes GOES (~40 min de retraso)": goes,

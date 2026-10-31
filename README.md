@@ -76,4 +76,4 @@ python -m pipeline.run --salida site/data    # datos reales (requiere internet)
 
 ## Licencias y atribución
 
-Datos de Open-Meteo y ECMWF bajo CC BY 4.0. Sentinel-2 cloudless 2024 by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2024), CC BY-NC-SA 4.0. Imágenes de NASA GIBS/EOSDIS. Estaciones: INAMHI. Etiquetas: © OpenStreetMap, © CARTO. Uso personal, no comercial.
+Datos de Open-Meteo y ECMWF bajo CC BY 4.0. Sentinel-2 cloudless 2024 by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2024), CC BY-NC-SA 4.0. Imágenes de NASA GIBS/EOSDIS. Estaciones: INAMHI. Calles: © OpenStreetMap. Uso personal, no comercial.
