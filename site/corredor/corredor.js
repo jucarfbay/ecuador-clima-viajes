@@ -239,14 +239,15 @@ function capas() {
   m.addLayer({ id: "lluvia", type: "fill", source: "lluvia",
     paint: {
       "fill-color": ["step", ["get", "v"], "rgba(0,0,0,0)", ...ESCALA.flatMap(([u, c]) => [u, `rgb(${c.join(",")})`])],
-      "fill-opacity": ["interpolate", ["linear"], ["get", "v"], 0.09, 0, 0.1, 0.06, 1, 0.24, 5, 0.44, 10, 0.56], "fill-antialias": false,
+      // Velo moderado: el relieve debe seguir leyéndose bajo la lluvia más intensa; el trazo lleva la intensidad.
+      "fill-opacity": ["interpolate", ["linear"], ["get", "v"], 0.09, 0, 0.1, 0.05, 1, 0.16, 5, 0.27, 10, 0.34], "fill-antialias": false,
     } });
   // Trazo de lluvia dentro de cada celda: más denso cuanto más intensa. Es la misma cifra del modelo, no más detalle.
   m.addLayer({ id: "lluvia-trazo", type: "fill", source: "lluvia", filter: [">=", ["get", "v"], 0.1],
-    paint: { "fill-pattern": ["step", ["get", "v"], "lluvia-t1", 1, "lluvia-t2", 2.5, "lluvia-t3", 5, "lluvia-t4"], "fill-opacity": 0.55 } });
+    paint: { "fill-pattern": ["step", ["get", "v"], "lluvia-t1", 1, "lluvia-t2", 2.5, "lluvia-t3", 5, "lluvia-t4"], "fill-opacity": 0.8 } });
   // Bordes de celda muy tenues: la resolución real del modelo queda a la vista.
   m.addLayer({ id: "lluvia-celdas", type: "line", source: "lluvia", filter: [">=", ["get", "v"], 0.1],
-    paint: { "line-color": "rgba(156,200,236,0.22)", "line-width": 0.7 } });
+    paint: { "line-color": "rgba(156,200,236,0.32)", "line-width": 0.8 } });
 
   // La trayectoria se divide en tramos de ~0,4 km. Cada tramo lleva la lluvia prevista a la hora en que pasarías:
   // la "manga" azul (ancho y color) es el dato; la línea clara es la vía.
@@ -319,6 +320,7 @@ function pintarCampo(i) {
   const L = S.lluvia;
   L._geo.features.forEach((f, j) => { f.properties.v = mmEn(j, i) ?? 0; });
   S.mapa.getSource("lluvia").setData(L._geo);
+  if (i >= 0) luz(L._fin[i] - H / 2);
   pintarValidez();
 }
 
@@ -334,6 +336,41 @@ function pintarValidez() {
     <span class="movil">ECMWF HRES, celdas de ~${km} km, corrida ${corrida}.</span>
     <div class="escala">${ESCALA.map(([, c]) => `<span style="background:rgb(${c.join(",")})"></span>`).join("")}</div>
     <div class="valores"><span>0,1</span><span>1</span><span>5</span><span>10+ mm/h</span></div>`;
+}
+
+// ------------------------------------------------------------------ luz según la hora (astronomía, no meteorología)
+
+/** Posición aproximada del sol en el corredor (~1,2° S) a fines de octubre: sale ~06:00 por el este-sureste, se pone ~18:15
+ *  por el oeste-suroeste. Solo orienta el sombreado y el tono de la escena; no representa nubosidad. */
+function sol(tMs) {
+  const d = local(tMs), h = d.getUTCHours() + d.getUTCMinutes() / 60;
+  const fr = (h - 6.05) / 12.2; // 0 salida, 1 puesta
+  return { dia: fr > 0 && fr < 1, fr, azimut: 105 + fr * 150, altura: Math.sin(Math.max(0, Math.min(1, fr)) * Math.PI) * 76 };
+}
+let ultimaLuz = null;
+function luz(tMs) {
+  const m = S.mapa, s0 = sol(tMs);
+  // tres estados de iluminación con transiciones al amanecer y atardecer (alrededor de una hora)
+  const crep = s0.dia ? Math.min(1, Math.min(s0.fr, 1 - s0.fr) * 12.2) : 0; // 0 noche … 1 pleno día
+  const clave = Math.round(crep * 10) + ":" + Math.round(s0.azimut / 10);
+  if (clave === ultimaLuz) return;
+  ultimaLuz = clave;
+  const mezcla = (a, b) => a.map((x, i) => Math.round(x + (b[i] - x) * crep));
+  const rgb = (c) => `rgb(${c.join(",")})`;
+  m.setPaintProperty("satelite", "raster-brightness-max", 0.3 + 0.42 * crep);
+  m.setPaintProperty("satelite", "raster-saturation", -0.35 + 0.43 * crep);
+  // de día el sombreado sigue al sol, con altura limitada (14–42°) para que el relieve siempre se lea
+  m.setPaintProperty("sombras", "hillshade-illumination-direction", s0.dia ? s0.azimut : 292);
+  m.setPaintProperty("sombras", "hillshade-illumination-altitude", s0.dia ? Math.max(14, Math.min(42, s0.altura)) : 30);
+  m.setPaintProperty("sombras", "hillshade-highlight-color", crep > 0.05 ? `rgba(255,196,128,${0.18 + 0.24 * crep})` : "rgba(150,180,220,0.14)");
+  m.setSky({
+    "sky-color": rgb(mezcla([3, 8, 16], [8, 21, 34])),
+    "horizon-color": rgb(mezcla([28, 38, 56], [201, 151, 106])),
+    "fog-color": rgb(mezcla([14, 22, 32], [74, 93, 108])),
+    "sky-horizon-blend": 0.55, "horizon-fog-blend": 0.65, "fog-ground-blend": 0.42,
+    "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 0.9, 12, 0.45],
+  });
+  document.documentElement.dataset.luz = crep < 0.15 ? "noche" : crep < 0.85 ? "crepusculo" : "dia";
 }
 
 // ------------------------------------------------------------------ marcadores anclados al relieve
@@ -622,7 +659,7 @@ function pintarInfo() {
     <h3>Ruta</h3><p>${esc(R.fuente)}, consultada el ${esc(R.consultado.slice(0, 10))}. ${num(R.distancia_km)} km y ${Math.round(R.s[R.s.length - 1] / 60)} min sin tráfico ni paradas (suma de tiempos por tramo de OSRM). ${esc(R.licencia)}.</p>
     <h3>Lluvia prevista</h3><p>${esc(L.modelo)}, producto ${esc(L.producto)}, ${esc(L.rejilla)}. ${esc(L.seleccion)}. Corrida iniciada ${esc(L.corrida_inicio_utc || "sin dato")} (UTC). La trayectoria toma la celda que contiene cada punto de la vía, a la hora en que pasarías.</p>
     <h3>Lluvia medida</h3><ul>${ests || "<li>Ninguna estación a menos de 7 km de la vía.</li>"}</ul><p>Visor del INAMHI, sin control de calidad publicado. Mover el tiempo no cambia las mediciones.</p>
-    <h3>Ambientación</h3><p>Cielo, neblina y color de luz son de representación, no datos. No hay nubes porque el sistema no tiene datos de nubosidad del corredor.</p>
+    <h3>Ambientación</h3><p>Cielo, neblina y color de luz son de representación, no datos. La dirección de la luz y la penumbra siguen la posición aproximada del sol a la hora de validez (astronomía); no indican nubosidad. No hay nubes porque el sistema no tiene datos de nubosidad del corredor.</p>
     <h3>Límites</h3><ul><li>Una celda de ~9 km no indica la lluvia exacta en un punto de la carretera.</li><li>No evalúa deslaves ni el estado de la vía: consulta el <a href="https://www.ecu911.gob.ec/consulta-de-vias/" target="_blank" rel="noopener">ECU 911</a>.</li><li>Prototipo: el fondo satelital es de uso no comercial.</li></ul>`;
 }
 
