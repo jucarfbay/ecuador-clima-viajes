@@ -165,27 +165,31 @@ function estilo() {
     },
     layers: [
       { id: "fondo", type: "background", paint: { "background-color": "#0B1218" } },
+      // El mosaico Sentinel-2 trae la luz cenital de mediodía: se baja y se contrasta para que mande el sombreado.
       { id: "satelite", type: "raster", source: "satelite",
-        paint: { "raster-saturation": -0.12, "raster-contrast": 0.18, "raster-brightness-max": 0.78, "raster-brightness-min": 0.0 } },
+        paint: { "raster-saturation": 0.08, "raster-contrast": 0.28, "raster-brightness-max": 0.72, "raster-brightness-min": 0.02 } },
       { id: "sombras", type: "hillshade", source: "sombras",
         paint: {
+          // Luz rasante de la tarde desde el oeste-noroeste: laderas al este en sombra azul, crestas cálidas.
           "hillshade-method": "combined",
-          "hillshade-illumination-direction": 285, "hillshade-illumination-altitude": 24, "hillshade-illumination-anchor": "map",
-          "hillshade-exaggeration": 0.62, "hillshade-shadow-color": "rgba(4,10,18,0.92)", "hillshade-highlight-color": "rgba(255,214,150,0.30)",
-          "hillshade-accent-color": "rgba(8,16,26,0.6)",
+          "hillshade-illumination-direction": 292, "hillshade-illumination-altitude": 16, "hillshade-illumination-anchor": "map",
+          "hillshade-exaggeration": 0.9, "hillshade-shadow-color": "rgba(3,9,20,0.96)", "hillshade-highlight-color": "rgba(255,196,128,0.42)",
+          "hillshade-accent-color": "rgba(6,14,28,0.75)",
         } },
     ],
     terrain: { source: "dem", exaggeration: 1.0 },
     sky: {
-      "sky-color": "#0c1a27", "horizon-color": "#9a8f7c", "fog-color": "#26343e",
-      "sky-horizon-blend": 0.7, "horizon-fog-blend": 0.55, "fog-ground-blend": 0.88,
-      "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 0.85, 12, 0.3],
+      // Ambientación (no dato): cielo profundo, horizonte cálido y bruma azul que separa los planos del relieve.
+      "sky-color": "#081522", "horizon-color": "#c9976a", "fog-color": "#4a5d6c",
+      "sky-horizon-blend": 0.55, "horizon-fog-blend": 0.65, "fog-ground-blend": 0.42,
+      "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 0.9, 12, 0.45],
     },
   };
 }
 
 const VISTAS = {
-  general: () => ({ center: [-78.575, -1.185], zoom: MOVIL ? 9.75 : 10.55, pitch: 70, bearing: 152 }),
+  // Desde detrás de Latacunga, a baja altura, con el valle abriéndose hacia el Tungurahua al fondo.
+  general: () => ({ center: [-78.585, -1.15], zoom: MOVIL ? 10.05 : 10.95, pitch: 73, bearing: 154 }),
   cenital: () => ({ center: [-78.53, -1.17], zoom: MOVIL ? 9.2 : 9.85, pitch: 0, bearing: 0 }),
   intro: () => ({ center: [-78.62, -0.95], zoom: MOVIL ? 8.7 : 9.3, pitch: 50, bearing: 168 }),
 };
@@ -219,6 +223,8 @@ async function iniciar() {
     controles();
     elegirSalida(S.k, { mover: false });
     $("#estado-carga").classList.add("listo");
+    // En teléfono la atribución compacta arranca abierta y tapa la escena: se cierra (sigue a un toque).
+    if (MOVIL) document.querySelectorAll(".maplibregl-ctrl-attrib.maplibregl-compact-show").forEach((el) => el.classList.remove("maplibregl-compact-show"));
     if (MOV) dibujarEntrada(); else { mapa.jumpTo(VISTAS.general()); pintarRuta(1); }
     medirFps();
   });
@@ -326,13 +332,14 @@ function marcadores() {
   // Marcas cada 10 minutos de viaje: la ruta se lee como trayectoria en el tiempo, no solo como línea.
   S.marcas = [];
   const fin = S.ruta.s[S.ruta.s.length - 1];
-  for (let seg = 600; seg < fin - 300; seg += 600) {
+  for (let seg = 900; seg < fin - 300; seg += 900) {
     const km = kmEnSegundos(seg);
-    if (S.ruta.hitos.some((h) => Math.abs(h.km - km) < 4)) continue; // no tapar los hitos
+    if (S.ruta.hitos.some((h) => Math.abs(h.km - km) < 5.5)) continue; // no tapar los hitos
     S.marcas.push({ seg, m: marcador(`<span class="t"></span>`, puntoEnKm(km), "marca-t", "left") });
   }
   // Referencia geográfica (no dato): el volcán que domina el final del corredor.
-  marcador(`<span>Tungurahua</span>`, [-78.4422, -1.4675], "relieve-nombre");
+  const tg = marcador(`<span class="triangulo" aria-hidden="true"></span><span>Tungurahua, 5.023 m</span>`, [-78.4422, -1.4675], "relieve-nombre");
+  tg.setOffset([0, -14]);
 }
 
 function pintarHitos(salida) {
@@ -346,6 +353,8 @@ function pintarHitos(salida) {
 function moverVehiculo(km) {
   const p = puntoEnKm(km);
   S.vehiculo.setLngLat(p);
+  // la etiqueta del vehículo reemplaza a la del hito cuando están juntos (no se encimam)
+  for (const h of S.ruta.hitos) S.marcadores[h.id]?.getElement().classList.toggle("con-vehiculo", Math.abs(h.km - km) < 1.5);
   const t = S.salidas[S.k] + segundosEnKm(km) * 1000;
   S.vehiculo.getElement().querySelector(".hora-v").textContent = hhmm(t);
   return t;
