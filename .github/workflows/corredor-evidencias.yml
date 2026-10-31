@@ -38,7 +38,9 @@ jobs:
           shopt -s nullglob
           f=(evidencias/video-tmp/*.webm)
           if [ ${#f[@]} -gt 0 ]; then
-            ffmpeg -y -loglevel error -i "${f[0]}" -vf "fps=30" -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p evidencias/corredor-recorrido-1280.mp4
+            command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null; }
+            ffmpeg -y -loglevel error -i "${f[0]}" -vf "fps=30" -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p evidencias/corredor-recorrido-1280.mp4 \
+              || cp "${f[0]}" evidencias/corredor-recorrido-1280.webm
           fi
           rm -rf evidencias/video-tmp
           ls -la evidencias
