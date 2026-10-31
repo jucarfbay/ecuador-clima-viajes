@@ -20,7 +20,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import calculo
-from .fuentes import MODELOS, Http, alta_resolucion_rejilla, ensamble, estaciones_inamhi, vias_ecu911
+from .fuentes import (MODELOS, Http, alta_resolucion_rejilla, ensamble, estaciones_inamhi, hres_corredor, meta_modelo,
+                      vias_ecu911)
 
 ECU = timezone(timedelta(hours=-5))
 RAIZ = Path(__file__).resolve().parent.parent
@@ -195,6 +196,44 @@ def mapa_calor(http: Http, ahora: datetime):
     }
 
 
+# ---------------------------------------------------------------- corredor (El corredor vivo)
+
+def _paso_mediano(valores):
+    v = sorted(set(valores))
+    difs = sorted(round(b - a, 5) for a, b in zip(v, v[1:]) if b - a > 1e-4)
+    return difs[len(difs) // 2] if difs else None
+
+
+def corredor_lluvia(http: Http, ahora: datetime):
+    """Celdas nativas de ECMWF HRES sobre el corredor: 24 h pasadas (misma corrida) y 72 h hacia adelante."""
+    r = hres_corredor(http)
+    try:
+        meta = meta_modelo(http, "ecmwf_ifs")
+    except Exception as e:  # noqa: BLE001 - sin metadatos se informa, no se inventa
+        meta = {"corrida_inicio": None, "error_meta": str(e)[:200]}
+    proxima = calculo.local(ahora).replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    sel = [i for i, ts in enumerate(r["tiempos"])
+           if proxima - timedelta(hours=24) <= datetime.fromisoformat(ts) < proxima + timedelta(hours=72)]
+    lats = [c["lat"] for c in r["celdas"]]
+    lons = [c["lon"] for c in r["celdas"]]
+    return {
+        "generado": ahora.isoformat(timespec="minutes"),
+        "modelo": "ECMWF IFS HRES (Open-Meteo, modelo ecmwf_ifs)",
+        "producto": "determinista",
+        "variable": "precipitación total de la hora que termina en el tiempo indicado",
+        "unidad": "mm (décimas de mm en valores_dmm)",
+        "rejilla": meta.get("rejilla") or "rejilla nativa de ECMWF IFS",
+        "seleccion": "celda nativa más cercana (cell_selection=nearest); sin interpolación",
+        "corrida_inicio_utc": meta.get("corrida_inicio"),
+        "corrida_disponible_utc": meta.get("corrida_disponible"),
+        "paso_lat": _paso_mediano(lats), "paso_lon": _paso_mediano(lons),
+        "celdas": r["celdas"],
+        "tiempos": [r["tiempos"][i] for i in sel],
+        "valores_dmm": [[None if s[i] is None else int(round(s[i] * 10)) for s in r["series"]] for i in sel],
+        "consultas": r["consultas"],
+    }
+
+
 # ---------------------------------------------------------------- estaciones
 
 def _utc(f: str) -> datetime:
@@ -331,6 +370,23 @@ def main(argv=None):
             estado["fuentes"]["pronostico"] = {"error": str(e)[:300]}
             if prev_pron:
                 escribir(salida / "pronostico.json", prev_pron)
+    # Corredor: celdas nativas HRES, cada vez que se recalcula el pronóstico (o si falta).
+    prev_corr = leer_previo(a.previo, "corredor_lluvia.json")
+    if prev_corr and vigente and edad_h(prev_corr, ahora) < a.vigencia_h:
+        escribir(salida / "corredor_lluvia.json", prev_corr)
+        estado["fuentes"]["corredor"] = {"generado": prev_corr["generado"], "accion": "reutilizado"}
+    else:
+        try:
+            corr = corredor_lluvia(http, ahora)
+            escribir(salida / "corredor_lluvia.json", corr)
+            estado["fuentes"]["corredor"] = {"generado": corr["generado"], "accion": "recalculado",
+                                             "celdas": len(corr["celdas"]), "corrida": corr["corrida_inicio_utc"]}
+            guardar_gz(archivo / f"corredor_{ahora:%Y%m%dT%H%M}.json.gz", corr)
+        except Exception as e:  # noqa: BLE001
+            estado["fuentes"]["corredor"] = {"error": str(e)[:300]}
+            if prev_corr:
+                escribir(salida / "corredor_lluvia.json", prev_corr)
+
     calor_vigente = bool(prev_calor) and vigente and edad_h(prev_calor, ahora) < a.vigencia_h
     if calor_vigente:
         escribir(salida / "calor.json", prev_calor)

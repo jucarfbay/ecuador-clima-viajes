@@ -1,0 +1,100 @@
+"""Geometría vial del corredor Latacunga → Ambato → Pelileo → Baños desde OSRM (OpenStreetMap).
+
+Se ejecuta a mano (flujo "Corredor: ruta") y el resultado se versiona en el repositorio, con fuente, fecha y
+licencia, para que la escena no dependa del servidor de demostración de OSRM en cada visita.
+
+Uso: python tools/ruta_corredor.py site/corredor/datos/ruta.json
+"""
+from __future__ import annotations
+
+import json
+import sys
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+RAIZ = Path(__file__).resolve().parent.parent
+OSRM = "https://router.project-osrm.org/route/v1/driving/"
+HITOS = ["latacunga", "ambato", "pelileo", "banos"]
+UA = "ecuador-clima-viajes/0.1 (uso personal, no comercial; github.com/jucarfbay/ecuador-clima-viajes)"
+
+
+def decodificar_polyline(s: str, precision: int = 6) -> list[list[float]]:
+    """Algoritmo de polilínea codificada de Google; devuelve [[lon, lat], ...]."""
+    coords, i, lat, lon, f = [], 0, 0, 0, 10 ** precision
+    while i < len(s):
+        for eje in (0, 1):
+            res = shift = 0
+            while True:
+                b = ord(s[i]) - 63
+                i += 1
+                res |= (b & 0x1F) << shift
+                shift += 5
+                if b < 0x20:
+                    break
+            d = ~(res >> 1) if res & 1 else res >> 1
+            if eje == 0:
+                lat += d
+            else:
+                lon += d
+        coords.append([round(lon / f, 6), round(lat / f, 6)])
+    return coords
+
+
+def construir(respuesta: dict, hitos: list[dict], url: str, consultado: str) -> dict:
+    r = respuesta["routes"][0]
+    coords = decodificar_polyline(r["geometry"])
+    km, s = [0.0], [0.0]
+    for leg in r["legs"]:
+        a = leg["annotation"]
+        for d, t in zip(a["distance"], a["duration"]):
+            km.append(km[-1] + d / 1000)
+            s.append(s[-1] + t)
+    if len(km) != len(coords):
+        raise ValueError(f"vértices {len(coords)} y anotaciones {len(km)} no coinciden")
+    # Índice del vértice de cada hito: fin acumulado de cada tramo.
+    idx, acum = [0], 0
+    for leg in r["legs"]:
+        acum += len(leg["annotation"]["distance"])
+        idx.append(acum)
+    salida_hitos = []
+    for h, i, wp in zip(hitos, idx, respuesta["waypoints"]):
+        salida_hitos.append({
+            "id": h["id"], "nombre": h["nombre"], "lat": h["lat"], "lon": h["lon"],
+            "en_via": {"lon": wp["location"][0], "lat": wp["location"][1], "desplazamiento_m": round(wp["distance"], 1)},
+            "vertice": i, "km": round(km[i], 3), "min": round(s[i] / 60, 2),
+        })
+    return {
+        "fuente": "OSRM (router.project-osrm.org) sobre OpenStreetMap",
+        "licencia": "Datos de ruta © colaboradores de OpenStreetMap, ODbL 1.0",
+        "url": url,
+        "consultado": consultado,
+        "nota": "Tiempos de OSRM sin tráfico ni paradas. Estimación inicial; no reemplaza el estado de vías del ECU 911.",
+        "distancia_km": round(r["distance"] / 1000, 3),
+        "duracion_min": round(r["duration"] / 60, 2),
+        "hitos": salida_hitos,
+        "coords": coords,
+        "km": [round(x, 4) for x in km],
+        "s": [round(x, 1) for x in s],
+    }
+
+
+def main(destino: str):
+    cfg = json.loads((RAIZ / "config" / "puntos.json").read_text(encoding="utf-8"))
+    por_id = {p["id"]: p for p in cfg["puntos"]}
+    hitos = [por_id[h] for h in HITOS]
+    url = OSRM + ";".join(f"{p['lon']},{p['lat']}" for p in hitos) + \
+        "?overview=full&geometries=polyline6&steps=false&annotations=duration,distance"
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        datos = json.loads(resp.read().decode("utf-8"))
+    if datos.get("code") != "Ok":
+        raise SystemExit(f"OSRM respondió {datos.get('code')}")
+    out = construir(datos, hitos, url, datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    Path(destino).parent.mkdir(parents=True, exist_ok=True)
+    Path(destino).write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"{out['distancia_km']} km, {out['duracion_min']} min, {len(out['coords'])} vértices ->", destino)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1] if len(sys.argv) > 1 else "site/corredor/datos/ruta.json")

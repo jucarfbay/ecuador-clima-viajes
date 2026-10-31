@@ -228,3 +228,49 @@ def vias_ecu911(http: Http, lote: int = 200) -> list[dict]:
         if not datos or inicio >= int((r or {}).get("total") or 0):
             break
     return salida
+
+
+# ---------------------------------------------------------------- corredor (prueba "El corredor vivo")
+
+CORREDOR_BBOX = {"lat_n": -0.85, "lat_s": -1.50, "lon_o": -78.75, "lon_e": -78.30}  # Latacunga–Baños con margen
+
+
+def meta_modelo(http: Http, modelo: str) -> dict:
+    """Hora de inicio de la última corrida y de disponibilidad, según los metadatos de Open-Meteo."""
+    m = http.get(f"https://api.open-meteo.com/data/{modelo}/static/meta.json")
+    from datetime import datetime, timezone
+    iso = lambda t: datetime.fromtimestamp(t, timezone.utc).isoformat(timespec="minutes") if t else None  # noqa: E731
+    return {"corrida_inicio": iso(m.get("last_run_initialisation_time")),
+            "corrida_disponible": iso(m.get("last_run_availability_time")),
+            "rejilla": "O1280 (gaussiana reducida, ~9 km)" if "O1280" in (m.get("crs_wkt") or "") else None}
+
+
+def hres_corredor(http: Http, bbox: dict = CORREDOR_BBOX, paso: float = 0.035, dias: int = 4,
+                  pasados: int = 1, lote: int = 100) -> dict:
+    """Lluvia horaria de ECMWF IFS HRES en sus celdas NATIVAS dentro del corredor, sin interpolar.
+
+    Se consulta una malla más densa que la rejilla del modelo con `cell_selection=nearest`; Open-Meteo devuelve
+    la celda nativa más cercana a cada punto (con sus coordenadas), y se conservan las celdas únicas. Incluye
+    `pasados` días hacia atrás de la misma corrida, para comparar con lo medido.
+    """
+    n_lat = int(round((bbox["lat_n"] - bbox["lat_s"]) / paso)) + 1
+    n_lon = int(round((bbox["lon_e"] - bbox["lon_o"]) / paso)) + 1
+    consulta = [(round(bbox["lat_n"] - i * paso, 4), round(bbox["lon_o"] + j * paso, 4))
+                for i in range(n_lat) for j in range(n_lon)]
+    celdas, tiempos = {}, None
+    for grupo in _lotes(consulta, lote):
+        resp = http.get(FORECAST_URL, {
+            "latitude": ",".join(f"{la}" for la, _ in grupo),
+            "longitude": ",".join(f"{lo}" for _, lo in grupo),
+            "hourly": "precipitation", "models": "ecmwf_ifs", "cell_selection": "nearest",
+            "forecast_days": dias, "past_days": pasados, "timezone": TZ,
+        })
+        resp = resp if isinstance(resp, list) else [resp]
+        for r in resp:
+            clave = (round(r["latitude"], 5), round(r["longitude"], 5))
+            tiempos = tiempos or r["hourly"]["time"]
+            if clave not in celdas:
+                celdas[clave] = {"elev": r.get("elevation"), "serie": r["hourly"]["precipitation"]}
+    claves = sorted(celdas, key=lambda c: (-c[0], c[1]))
+    return {"tiempos": tiempos, "celdas": [{"lat": c[0], "lon": c[1], "elev": celdas[c]["elev"]} for c in claves],
+            "series": [celdas[c]["serie"] for c in claves], "consultas": len(consulta)}

@@ -49,8 +49,18 @@ class HttpFalso:
             return respuesta_ensamble(n, miembros, params["forecast_days"], self.mm, off)
         if url == FORECAST_URL:
             n = len(params["latitude"].split(","))
+            if params.get("cell_selection") == "nearest":
+                # Rejilla "nativa" de 0,07°: varios puntos de consulta caen en la misma celda.
+                t = tiempos_locales(params["forecast_days"] + params["past_days"])
+                lats = [float(x) for x in params["latitude"].split(",")]
+                lons = [float(x) for x in params["longitude"].split(",")]
+                return [{"latitude": round(la / 0.07) * 0.07, "longitude": round(lo / 0.07) * 0.07, "elevation": 2500.0,
+                         "hourly": {"time": t, "precipitation": [0.3] * len(t)}} for la, lo in zip(lats, lons)]
             t = tiempos_locales(params["forecast_days"])
             return [{"hourly": {"time": t, "precipitation": [0.2] * len(t)}} for _ in range(n)]
+        if url.endswith("/static/meta.json"):
+            return {"last_run_initialisation_time": 1793383200, "last_run_availability_time": 1793404647,
+                    "crs_wkt": "REMARK[\"Reduced Gaussian Grid O1280 (ECMWF)\"]"}
         if url.endswith("estaciones/visores/"):
             return [
                 {"id_estacion": 1, "codigo": "M1", "estado_transmision": "TRANSMITIENDO", "latitud": "-0.2",
@@ -208,6 +218,21 @@ class TestPipeline(unittest.TestCase):
             self.assertIn("vias", pron["rutas"][0])  # la ruta reutilizada lleva la configuración actual
             self.assertEqual(estado["fuentes"]["calor"]["accion"], "reutilizado")
             self.assertFalse(list(Path(f"{tmp}/arch").glob("pronostico_*.json.gz")))
+
+    def test_corredor_celdas_nativas(self):
+        c = run.corredor_lluvia(HttpFalso(lambda m, i: 0), AHORA)
+        claves = {(x["lat"], x["lon"]) for x in c["celdas"]}
+        self.assertEqual(len(claves), len(c["celdas"]))  # sin celdas repetidas
+        self.assertLess(len(c["celdas"]), c["consultas"])  # varias consultas por celda nativa: no se inventa detalle
+        self.assertAlmostEqual(c["paso_lat"], 0.07, places=3)
+        self.assertEqual(c["corrida_inicio_utc"], "2026-10-30T18:00+00:00")
+        self.assertIn("O1280", c["rejilla"])
+        # Ventana: 24 h antes y 72 h después de la próxima hora (21:00 del 29). La serie falsa empieza el 29 a las
+        # 00:00, así que de las 24 h pasadas solo hay 21; termina a las 20:00 del 1 de noviembre.
+        self.assertEqual(c["tiempos"][0], "2026-10-29T00:00")
+        self.assertEqual(c["tiempos"][-1], "2026-11-01T20:00")
+        self.assertEqual(len(c["tiempos"]), 21 + 72)
+        self.assertEqual(len(c["valores_dmm"][0]), len(c["celdas"]))
 
     def test_vias_ecu911(self):
         vs = vias_ecu911(HttpFalso(lambda m, i: 0), lote=1)
