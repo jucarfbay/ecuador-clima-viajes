@@ -67,6 +67,12 @@ jobs:
           cp tools/evidencias_corredor.mjs /tmp/pw/
           node /tmp/pw/evidencias_corredor.mjs "${{ steps.sitio.outputs.url }}" "$GITHUB_WORKSPACE/evidencias" "${{ steps.sitio.outputs.url_antes }}" > evidencias/captura.txt 2>&1 || echo "La captura terminó con error; se publica lo que haya"
           tail -30 evidencias/captura.txt
+      - name: Guardar los datos usados (reproducibilidad)
+        run: |
+          mkdir -p evidencias/datos-usados
+          cp site/data/corredor_lluvia.json site/data/estaciones.json evidencias/datos-usados/ 2>/dev/null || true
+          cp site/corredor/datos/ruta.json evidencias/datos-usados/ 2>/dev/null || true
+          (cd evidencias/datos-usados && sha256sum *.json > SHA256SUMS) || true
       - name: Video a MP4
         run: |
           shopt -s nullglob

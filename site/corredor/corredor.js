@@ -432,8 +432,8 @@ function marcador(html, lngLat, clase, { prioridad = 5, variantes = ["arriba", "
 function acomodar() {
   if (!S.etiquetas.length) return;
   const puestos = [], ancho = innerWidth, alto = innerHeight;
-  const banda = $(".tiempo")?.getBoundingClientRect(), cab = $(".titulo")?.getBoundingClientRect();
-  for (const r of [banda, cab]) if (r) puestos.push(r);
+  // la interfaz fija también ocupa lugar: título, mandos de cámara, banda de decisión y avisos
+  for (const sel of [".tiempo", ".titulo", ".mandos", "#aviso:not([hidden])"]) { const el = $(sel); if (el) puestos.push(el.getBoundingClientRect()); }
   const choca = (a) => puestos.some((b) => a.left < b.right + 4 && a.right + 4 > b.left && a.top < b.bottom + 3 && a.bottom + 3 > b.top);
   const orden = [...S.etiquetas].sort((a, b) => a.prioridad - b.prioridad);
   for (const e of orden) {
@@ -724,7 +724,7 @@ function pintarPie() {
     <span class="leyenda" aria-hidden="true">${ESCALA.map(([, c]) => `<i style="background:rgb(${c.join(",")})"></i>`).join("")}</span>
     <span class="leyenda-t">0,1 → 10+ mm/h; la cortina sube ${ALTO_MM} m por cada mm/h</span>
     <span>Mapa válido <b>${valida}</b></span>
-    <span>Emisión: ECMWF HRES, corrida ${corrida}</span>
+    <span>Emisión: ECMWF HRES, corrida ${corrida} (hora de Ecuador)</span>
     <span>Medido hasta ${medido}</span>
     <span class="vial">Lluvia prevista no indica estado de la vía ni deslaves</span>`;
 }
