@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import calculo
-from .fuentes import MODELOS, Http, alta_resolucion_rejilla, ensamble, estaciones_inamhi
+from .fuentes import MODELOS, Http, alta_resolucion_rejilla, ensamble, estaciones_inamhi, vias_ecu911
 
 ECU = timezone(timedelta(hours=-5))
 RAIZ = Path(__file__).resolve().parent.parent
@@ -356,6 +356,24 @@ def main(argv=None):
         estado["fuentes"]["estaciones"] = {"error": str(e)[:300]}
         if prev_obs:
             escribir(salida / "estaciones.json", prev_obs)
+
+    # Estado de las vías (ECU 911), cada ejecución.
+    prev_vias = leer_previo(a.previo, "vias.json")
+    try:
+        vs = vias_ecu911(http)
+        escribir(salida / "vias.json", {
+            "generado": ahora.isoformat(timespec="minutes"),
+            "fuente": "ECU 911, consulta de vías (consolida reportes del ECU 911, el MIT y la SNGR)",
+            "enlace": "https://www.ecu911.gob.ec/consulta-de-vias/",
+            "vias": vs,
+        })
+        estado["fuentes"]["vias"] = {"generado": ahora.isoformat(timespec="minutes"), "n": len(vs),
+                                     "cerradas": sum(1 for v in vs if v["estado"].upper().startswith("CERRADA"))}
+        guardar_gz(archivo / f"vias_{ahora:%Y%m%dT%H%M}.json.gz", vs)
+    except Exception as e:  # noqa: BLE001 - sin vías la web muestra el enlace al ECU 911
+        estado["fuentes"]["vias"] = {"error": str(e)[:300]}
+        if prev_vias:
+            escribir(salida / "vias.json", prev_vias)
 
     estado["llamadas_http"] = http.llamadas
     escribir(salida / "estado.json", estado)

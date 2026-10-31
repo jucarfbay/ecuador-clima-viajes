@@ -12,7 +12,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
 from pipeline import calculo, run  # noqa: E402
-from pipeline.fuentes import ENSEMBLE_URL, FORECAST_URL, INAMHI_API  # noqa: E402
+from pipeline.fuentes import ECU911_VIAS, ENSEMBLE_URL, FORECAST_URL, INAMHI_API, vias_ecu911  # noqa: E402
 
 ECU = timezone(timedelta(hours=-5))
 AHORA = datetime(2026, 10, 29, 20, 30, tzinfo=ECU)
@@ -62,6 +62,15 @@ class HttpFalso:
             return [{"id_param": 17, "params": [{"nemonico": "017140801h"}]}]
         if url.endswith("station_information/estaciones/"):
             return [{"punto_obs": "TOCTIUCO - EPMAPS QUITO", "provincia": "PICHINCHA"}]
+        if url == ECU911_VIAS:
+            # Mismo formato que el servicio real (recortado); dos páginas para probar la paginación.
+            via = {"id": "x", "descripcion": " AMBATO - BAÑOS ", "observaciones": "DERRUMBE EN EL KM 5",
+                   "modified": "2026-10-29 06:11:10", "GroupDetail": {"nombre": "ARTERIAL"},
+                   "EstadoActual": {"id": 595, "nombre": "CERRADA"}, "Provincia": {"descripcion": "TUNGURAHUA"},
+                   "Canton": {"descripcion": "BAÑOS DE AGUA SANTA"},
+                   "DetalleViaAlterna": [{"Via": {"descripcion": "PATATE - BAÑOS"}}]}
+            datos = [via] if params["start"] == 0 else [dict(via, id="y")]
+            return {"data": datos, "total": 2, "code": 200}
         raise AssertionError("URL inesperada " + url)
 
     def post(self, url, body):
@@ -177,6 +186,9 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(len(calor["valores_dmm"][0]), len(calor["lats"]) * len(calor["lons"]))
             self.assertTrue(list(Path(f"{tmp}/arch").glob("pronostico_*.json.gz")))
             self.assertTrue(list(Path(f"{tmp}/arch").glob("calor_*.json.gz")))
+            vias = json.loads(Path(f"{tmp}/data/vias.json").read_text())
+            self.assertEqual(len(vias["vias"]), 2)
+            self.assertTrue(list(Path(f"{tmp}/arch").glob("vias_*.json.gz")))
 
     def test_freno_con_archivo(self):
         """Si el sitio no responde pero el archivo tiene un pronóstico de hace 2 h, no se recalcula."""
@@ -194,6 +206,14 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(estado["fuentes"]["pronostico"]["accion"], "reutilizado")
             self.assertEqual(estado["fuentes"]["calor"]["accion"], "reutilizado")
             self.assertFalse(list(Path(f"{tmp}/arch").glob("pronostico_*.json.gz")))
+
+    def test_vias_ecu911(self):
+        vs = vias_ecu911(HttpFalso(lambda m, i: 0), lote=1)
+        self.assertEqual(len(vs), 2)  # dos páginas
+        self.assertEqual(vs[0], {"id": "x", "via": "AMBATO - BAÑOS", "estado": "CERRADA", "categoria": "ARTERIAL",
+                                 "provincia": "TUNGURAHUA", "canton": "BAÑOS DE AGUA SANTA",
+                                 "observaciones": "DERRUMBE EN EL KM 5", "alternas": ["PATATE - BAÑOS"],
+                                 "modificado": "2026-10-29T06:11-05:00"})
 
     def test_estacion_atrasada(self):
         serie = [["2026-10-29T10:00:00+00:00", 5.0], ["2026-10-29T11:00:00+00:00", 2.0]]  # 06:00 hora de Ecuador

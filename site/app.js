@@ -5,7 +5,7 @@ const Lg = window.Logica;
 const VERSION = "dev"; // el flujo de publicación lo reemplaza por el commit, para renovar la caché del teléfono
 
 const E = {
-  pron: null, calor: null, obs: null, estado: null, cargado: 0, desdeCache: false,
+  pron: null, calor: null, obs: null, estado: null, vias: null, cargado: 0, desdeCache: false,
   porId: {}, favs: [], lugar: null, ubic: null, panel: null, pintados: new Set(),
   viaje: { ruta: null, fecha: null, salida: null, noche: false },
   mapa: null, capas: {}, calorIdx: 0, reproduciendo: null, provFecha: null,
@@ -47,8 +47,9 @@ async function cargar(nombre) {
 
 async function iniciar() {
   E.desdeCache = false;
-  [E.pron, E.calor, E.obs, E.estado] = await Promise.all(["pronostico.json", "calor.json", "estaciones.json", "estado.json"].map(cargar));
+  [E.pron, E.calor, E.obs, E.estado, E.vias] = await Promise.all(["pronostico.json", "calor.json", "estaciones.json", "estado.json", "vias.json"].map(cargar));
   E.cargado = Date.now();
+  E.viasProv = null;
   pintarFrescura();
   pintarConexion();
   if (!E.pron || !E.pron.puntos) { mostrarErrorCarga(); prepararNavegacion(); return; }
@@ -132,6 +133,7 @@ function pintarFrescura() {
   const b = $("#frescura");
   if (!E.pron) { b.textContent = "Sin datos"; b.className = "frescura sin-datos"; return; }
   const f = Lg.frescura(E.pron, E.obs, E.calor);
+  if (E.vias?.generado) f.items.push({ clave: "vias", texto: `Estado de vías del ECU 911 consultado a las ${Lg.horaEcuador(E.vias.generado)}` });
   b.textContent = E.estado?.demo ? "Datos de demostración" : f.corto;
   b.className = "frescura" + (f.atrasado || E.estado?.demo ? " atrasado" : "");
   const panel = $("#frescura-panel");
@@ -515,6 +517,65 @@ function pintarRespuestaViaje(ruta, ev, mejor) {
       <span class="nombre">${esc(nombre(t.punto))} ${intensidadHTML(t.clase, true)}</span>
       <span class="det">Llueve algo en ${Lg.deCada10(t.pAlgo)} escenarios; moderada o más en ${Lg.deCada10(t.pMod)}. Lo más probable ${Lg.num(t.mediana)} mm en esa hora.</span></li>`).join("");
   pintarMedidoRuta(ruta);
+  pintarViasRuta(ruta);
+}
+
+// ------------------------------------------------------------------ estado de las vías y alertas
+
+const ICONO_VIA = { 3: "■", 2: "▲", 1: "◇" };
+function estadoViaHTML(v) {
+  const g = Lg.gravedadVia(v.estado);
+  return `<span class="nivel n${g}"><span class="icono" aria-hidden="true">${ICONO_VIA[g]}</span>${esc(mayus(v.estado.toLowerCase()))}</span>`;
+}
+
+function viaHTML(v) {
+  const mod = v.modificado ? Lg.parseLocal(v.modificado.slice(0, 16)) : null;
+  const alt = (v.alternas || []).filter((a) => a && a !== "N/A");
+  return `<li class="via g${Lg.gravedadVia(v.estado)}">
+    <div class="via-cab"><span class="via-nombre">${esc(Lg.titulo(v.via))}</span>${estadoViaHTML(v)}</div>
+    ${v.observaciones ? `<p>${esc(Lg.oracion(v.observaciones))}</p>` : ""}
+    ${alt.length ? `<p class="nota">Vía alterna: ${alt.map((a) => esc(Lg.titulo(a))).join("; ")}</p>` : ""}
+    <p class="nota">${esc(Lg.titulo(v.provincia))}${v.canton ? `, ${esc(Lg.titulo(v.canton))}` : ""}${mod ? `. Actualizado ${Lg.diaRelativo(mod, Lg.ahoraLocal())} a las ${Lg.hora(mod)}` : ""}</p>
+  </li>`;
+}
+
+function pintarViasRuta(ruta) {
+  const cont = $("#viaje-vias");
+  const enlaceEcu = `<a href="https://www.ecu911.gob.ec/consulta-de-vias/" target="_blank" rel="noopener">consulta de vías del ECU 911</a>`;
+  const cfg = ruta.vias;
+  let html = `<h2 class="titulo-bloque">Estado de las vías</h2>`;
+  if (!E.vias || !Array.isArray(E.vias.vias)) {
+    html += `<p class="aviso-vias">No se pudo leer el estado de las vías. Revísalo en la ${enlaceEcu} antes de salir.</p>`;
+  } else {
+    const edad = Date.now() - new Date(E.vias.generado).getTime();
+    const { enRuta, enProvincias } = Lg.viasDeRuta(E.vias.vias, cfg);
+    const provs = (cfg?.provincias || []).map((x) => Lg.titulo(x)).join(", ");
+    html += `<p class="nota">Según el ECU 911 (incluye reportes del MIT y la SNGR), consultado a las ${Lg.horaEcuador(E.vias.generado)}.</p>`;
+    if (edad > 3 * Lg.H) html += `<p class="aviso-vias">Este dato tiene ${Lg.hace(edad).replace("hace ", "")}. Confírmalo en la ${enlaceEcu}.</p>`;
+    if (!cfg) {
+      html += `<p>Esta ruta todavía no tiene configuradas sus vías. Revisa la ${enlaceEcu}.</p>`;
+    } else if (enRuta.length) {
+      const cerradas = enRuta.filter((v) => Lg.gravedadVia(v.estado) === 3).length;
+      const otras = enRuta.length - cerradas;
+      const partes = [];
+      if (cerradas) partes.push(`<strong>${cerradas} ${cerradas === 1 ? "vía cerrada" : "vías cerradas"}</strong>`);
+      if (otras) partes.push(`${otras} ${otras === 1 ? "vía" : "vías"} con paso restringido`);
+      html += `<p class="vias-resumen">En tu ruta: ${partes.join(" y ")}.</p>
+        <ul class="vias">${enRuta.map(viaHTML).join("")}</ul>`;
+    } else {
+      html += `<p class="vias-resumen">Sin novedades reportadas en la vía de tu ruta.</p>`;
+    }
+    if (cfg && enProvincias.length) {
+      html += `<details class="plegable"><summary>Otras ${enProvincias.length} novedades en ${esc(provs)}</summary>
+        <ul class="vias">${enProvincias.map(viaHTML).join("")}</ul></details>`;
+    }
+  }
+  html += `<div class="alertas-oficiales"><p class="rotulo">Antes de salir, revisa también</p><ul>
+    <li><a href="https://www.ecu911.gob.ec/consulta-de-vias/" target="_blank" rel="noopener">Consulta de vías del ECU 911</a>: estado actualizado y pasos alternos.</li>
+    <li><a href="https://www.inamhi.gob.ec/" target="_blank" rel="noopener">Advertencias meteorológicas del INAMHI</a> vigentes.</li>
+    <li><a href="https://www.gestionderiesgos.gob.ec/" target="_blank" rel="noopener">Secretaría de Gestión de Riesgos</a>: alertas y emergencias por cantón.</li>
+    <li>En una emergencia en la vía, llama al <a href="tel:911">911</a>.</li></ul></div>`;
+  cont.innerHTML = html;
 }
 
 function pintarMedidoRuta(ruta) {
@@ -797,6 +858,23 @@ function detenerReproduccion() {
 
 // ------------------------------------------------------------------ provincias
 
+function viasDeProvincia(nombre) {
+  if (!E.vias || !Array.isArray(E.vias.vias)) return [];
+  E.viasProv ||= Lg.viasPorProvincia(E.vias.vias);
+  return E.viasProv[Lg.palabras(nombre)] || [];
+}
+function textoViasProvincia(nombre) {
+  const vs = viasDeProvincia(nombre);
+  if (!vs.length) return "";
+  const c = vs.filter((v) => Lg.gravedadVia(v.estado) === 3).length;
+  return `. ${vs.length} ${vs.length === 1 ? "vía" : "vías"} con novedades${c ? ` (${c} ${c === 1 ? "cerrada" : "cerradas"})` : ""}`;
+}
+function listaViasProvincia(nombre) {
+  const vs = viasDeProvincia(nombre).sort((a, b) => Lg.gravedadVia(b.estado) - Lg.gravedadVia(a.estado));
+  if (!vs.length) return "";
+  return `<li class="prov-vias"><details><summary>Vías con novedades (ECU 911)</summary><ul class="vias">${vs.map(viaHTML).join("")}</ul></details></li>`;
+}
+
 function pintarProvincias() {
   const p = E.pron;
   const hoy = Lg.fechaISO(Lg.ahoraLocal());
@@ -812,9 +890,9 @@ function pintarProvincias() {
     <button type="button" class="prov-fila" aria-expanded="false" aria-controls="prov-${k}">
       <span class="nombre">${esc(pr.provincia)}</span>
       ${nivelHTML(d.nivel, { corto: true, extra: d.confianza === "tendencia" ? "tendencia" : "" })}
-      <span class="cuantos">${d.nivel > 0 ? `En ${d.puntos_afectados} de ${d.puntos_total} puntos` : `${d.puntos_total} puntos`}, confianza ${d.confianza}</span>
+      <span class="cuantos">${d.nivel > 0 ? `En ${d.puntos_afectados} de ${d.puntos_total} puntos` : `${d.puntos_total} puntos`}, confianza ${d.confianza}${textoViasProvincia(pr.provincia)}</span>
     </button>
-    <ul class="prov-puntos" id="prov-${k}" hidden>${pr.puntos.map((id) => {
+    <ul class="prov-puntos" id="prov-${k}" hidden>${listaViasProvincia(pr.provincia)}${pr.puntos.map((id) => {
       const pt = E.porId[id];
       const dd = pt.dias.find((x) => x.fecha === E.provFecha);
       return `<li><span>${esc(pt.nombre)} ${dd ? nivelHTML(dd.nivel, { corto: true }) : ""}

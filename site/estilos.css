@@ -384,3 +384,22 @@ table.tabla-prov { border-collapse: collapse; width: 100%; font-size: .78rem; }
 @media (max-width: 360px) {
   .dias li { grid-template-columns: 4rem 6.4rem 1fr; gap: 6px; }
 }
+
+/* ---------------------------------------------------------------- estado de las vías (ECU 911) */
+.vias-ruta { margin: 22px 0 8px; padding-top: 14px; border-top: 1px solid var(--linea); }
+.titulo-bloque { font-size: 1.15rem; font-weight: 800; margin: 0 0 2px; letter-spacing: -.01em; }
+.vias-resumen { font-size: 1.02rem; margin: 8px 0; }
+.aviso-vias { background: var(--aviso); padding: 8px 10px; border-radius: 8px; font-size: .9rem; }
+.vias { list-style: none; padding: 0; margin: 6px 0; }
+.via { padding: 10px 0 8px 12px; border-left: 4px solid var(--borde); margin-bottom: 8px; }
+.via.g3 { border-left-color: var(--n3); }
+.via.g2 { border-left-color: var(--n2); }
+.via.g1 { border-left-color: var(--n1-b); }
+.via p { margin: 3px 0; font-size: .9rem; }
+.via-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.via-nombre { font-weight: 800; }
+.alertas-oficiales { margin-top: 14px; padding: 10px 12px; background: var(--hoja); border-radius: 10px; }
+.alertas-oficiales ul { margin: 0; padding-left: 18px; font-size: .9rem; }
+.alertas-oficiales li { margin: 4px 0; }
+.prov-vias { display: block !important; padding: 0 0 6px; }
+.prov-vias summary { cursor: pointer; color: var(--agua); font-weight: 600; font-size: .88rem; padding: 4px 0; }

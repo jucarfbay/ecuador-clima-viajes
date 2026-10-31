@@ -146,3 +146,34 @@ test("frescura dice a qué se refiere cada hora", () => {
   assert.match(f.items[0].texto, /calculado a las 13:34 \(hace 6 h 6 min\)/);
   assert.match(f.items[1].texto, /último dato a las 19:00 \(hace 40 min\); 1 de 2 estaciones al día/);
 });
+
+// ------------------------------------------------------------ estado de vías
+const CFG_RUTA = { provincias: ["PICHINCHA", "COTOPAXI", "TUNGURAHUA"],
+  localidades: ["QUITO", "TAMBILLO", "ALOAG", "MACHACHI", "LASSO", "LATACUNGA", "SALCEDO", "AMBATO", "PELILEO", "BANOS"],
+  carreteras: ["E35", "PANAMERICANA"] };
+const via = (via, provincia, estado = "PARCIALMENTE HABILITADA", observaciones = "", modificado = "2026-10-30T06:00-05:00") =>
+  ({ via, provincia, estado, observaciones, modificado });
+
+test("vías: de la ruta por dos localidades o por la carretera; el resto de la provincia aparte", () => {
+  const vias = [
+    via("AMBATO - PELILEO - BAÑOS", "TUNGURAHUA", "CERRADA"),
+    via("BAÑOS - PUYO", "TUNGURAHUA"),                       // solo una localidad: sigue después de Baños
+    via("ZUMBAHUA - LATACUNGA", "COTOPAXI", "PARCIALMENTE HABILITADA", "E30 KM 79"), // otra vía que sale de Latacunga
+    via("ALOAG - SANTO DOMINGO", "PICHINCHA"),
+    via("SECTOR LASSO", "COTOPAXI", "PARCIALMENTE HABILITADA", "HUNDIMIENTO EN LA E-35 KM 12"),
+    via("CUENCA - MOLLETURO - NARANJAL", "AZUAY"),           // fuera de la ruta y de sus provincias
+  ];
+  const r = L.viasDeRuta(vias, CFG_RUTA);
+  assert.deepEqual(r.enRuta.map((v) => v.via), ["AMBATO - PELILEO - BAÑOS", "SECTOR LASSO"]);
+  assert.deepEqual(r.enProvincias.map((v) => v.via).sort(), ["ALOAG - SANTO DOMINGO", "BAÑOS - PUYO", "ZUMBAHUA - LATACUNGA"]);
+});
+
+test("vías: gravedad, texto legible y agrupación por provincia", () => {
+  assert.equal(L.gravedadVia("CERRADA"), 3);
+  assert.equal(L.gravedadVia("PARCIALMENTE HABILITADA"), 2);
+  assert.equal(L.gravedadVia("HABILITADA CON RESTRICCIÓN VEHICULAR"), 1);
+  assert.equal(L.oracion("DESLIZAMIENTO EN EL KM 40. MANEJAR CON CUIDADO"), "Deslizamiento en el km 40. Manejar con cuidado");
+  assert.equal(L.titulo("CUENCA - GIRON -PASAJE - MACHALA"), "Cuenca - Giron - Pasaje - Machala");
+  const g = L.viasPorProvincia([via("A", "LOS RIOS"), via("B", "Los Ríos")]);
+  assert.equal(g["LOS RIOS"].length, 2);
+});

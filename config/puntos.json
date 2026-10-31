@@ -101,7 +101,31 @@
           "punto": "banos",
           "min": 195
         }
-      ]
+      ],
+      "vias": {
+        "nota": "Para cruzar con el estado de vías del ECU 911 (que no trae coordenadas): una vía es de la ruta si su nombre menciona dos localidades de la ruta o la carretera de la ruta (E35, Panamericana). La E30 no se usa porque también es Latacunga - La Maná.",
+        "provincias": [
+          "PICHINCHA",
+          "COTOPAXI",
+          "TUNGURAHUA"
+        ],
+        "localidades": [
+          "QUITO",
+          "TAMBILLO",
+          "ALOAG",
+          "MACHACHI",
+          "LASSO",
+          "LATACUNGA",
+          "SALCEDO",
+          "AMBATO",
+          "PELILEO",
+          "BANOS"
+        ],
+        "carreteras": [
+          "E35",
+          "PANAMERICANA"
+        ]
+      }
     }
   ]
 }

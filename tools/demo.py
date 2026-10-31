@@ -77,6 +77,23 @@ def estaciones_demo(ahora):
     return {"generado": ahora.isoformat(timespec="minutes"), "fuente": "DEMO", "estaciones": salida}
 
 
+def vias_demo(ahora):
+    """Novedades viales de ejemplo con el formato del ECU 911 (no son reales)."""
+    def v(via, prov, estado, obs, alt=None, h=3):
+        return {"id": via, "via": via, "estado": estado, "categoria": "ARTERIAL", "provincia": prov, "canton": None,
+                "observaciones": obs, "alternas": alt or [],
+                "modificado": (ahora - timedelta(hours=h)).isoformat(timespec="minutes")}
+    return {"generado": ahora.isoformat(timespec="minutes"), "fuente": "DEMO", "enlace": "https://www.ecu911.gob.ec/consulta-de-vias/",
+            "vias": [
+                v("AMBATO - PELILEO - BAÑOS", "TUNGURAHUA", "PARCIALMENTE HABILITADA",
+                  "DERRUMBE EN EL SECTOR ULBA, PASO A UN CARRIL. CONDUCIR CON PRECAUCIÓN", ["PATATE - BAÑOS"]),
+                v("BAÑOS - PUYO", "TUNGURAHUA", "CERRADA", "DESLIZAMIENTO DE TIERRA SECTOR RÍO VERDE", h=8),
+                v("PUJILI - LA MANA", "COTOPAXI", "PARCIALMENTE HABILITADA", "DESLIZAMIENTO TALUD INFERIOR KM 79"),
+                v("CUENCA - MOLLETURO - NARANJAL", "AZUAY", "PARCIALMENTE HABILITADA", "PASO CONTROLADO EN EL KM 71"),
+                v("PALESTINA - RIOVERDE", "ESMERALDAS", "CERRADA", "PUENTE AFECTADO POR EROSIÓN HÍDRICA"),
+            ]}
+
+
 def main(destino):
     ahora = datetime.now(ECU).replace(second=0, microsecond=0)
     if len(sys.argv) > 2:  # hora fija para capturas reproducibles: AAAA-MM-DDTHH:MM
@@ -91,6 +108,7 @@ def main(destino):
     run.escribir(d / "pronostico.json", pron)
     run.escribir(d / "calor.json", calor)
     run.escribir(d / "estaciones.json", obs)
+    run.escribir(d / "vias.json", vias_demo(ahora))
     run.escribir(d / "estado.json", {"generado": pron["generado"], "demo": True})
     print("Datos de demostración en", d)
 

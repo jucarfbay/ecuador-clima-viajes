@@ -14,6 +14,9 @@ TZ = "America/Guayaquil"
 ENSEMBLE_URL = "https://ensemble-api.open-meteo.com/v1/ensemble"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 INAMHI_API = "https://inamhi.gob.ec/api_rest/"
+# Servicio que alimenta https://www.ecu911.gob.ec/consulta-de-vias/ (vías con novedades; consolida ECU 911, MIT y SNGR).
+ECU911_VIAS = "https://ecu911.gob.ec/Services/WSVias/ViasWeb.php"
+ECU911_HABILITADA = 593  # id de "HABILITADA" en el catálogo de estados; la consulta pide las que NO lo están
 USER_AGENT = "ecuador-clima-viajes/0.1 (uso personal, no comercial; github.com/jucarfbay/ecuador-clima-viajes)"
 
 # Modelos de ensamble y peso inicial en la probabilidad combinada (revisión independiente:
@@ -190,3 +193,38 @@ def estaciones_inamhi(http: Http, metadatos_previos: dict | None = None, hilos: 
     with ThreadPoolExecutor(max_workers=hilos) as ex:
         res = [r for r in ex.map(una, activas) if r]
     return res
+
+
+def _fecha_ecu911(s: str | None) -> str | None:
+    """'2026-10-29 06:11:10' (hora de Ecuador) -> '2026-10-29T06:11-05:00'."""
+    if not s:
+        return None
+    return s.strip()[:16].replace(" ", "T") + "-05:00"
+
+
+def vias_ecu911(http: Http, lote: int = 200) -> list[dict]:
+    """Vías con novedades (cerradas, parcialmente habilitadas o con restricción) según el ECU 911."""
+    salida, inicio = [], 0
+    while True:
+        r = http.get(ECU911_VIAS, {
+            "estado": "A", "and:<>:EstadoActual-id": ECU911_HABILITADA, "order": "Provincia-descripcion",
+            "limit": lote, "start": inicio,
+        })
+        datos = (r or {}).get("data") or []
+        for v in datos:
+            salida.append({
+                "id": v.get("id"),
+                "via": (v.get("descripcion") or "").strip(),
+                "estado": ((v.get("EstadoActual") or {}).get("nombre") or "").strip(),
+                "categoria": ((v.get("GroupDetail") or {}).get("nombre") or "").strip() or None,
+                "provincia": ((v.get("Provincia") or {}).get("descripcion") or "").strip(),
+                "canton": ((v.get("Canton") or {}).get("descripcion") or "").strip() or None,
+                "observaciones": (v.get("observaciones") or "").strip(),
+                "alternas": [d["Via"]["descripcion"].strip() for d in v.get("DetalleViaAlterna") or []
+                             if (d.get("Via") or {}).get("descripcion")],
+                "modificado": _fecha_ecu911(v.get("modified")),
+            })
+        inicio += len(datos)
+        if not datos or inicio >= int((r or {}).get("total") or 0):
+            break
+    return salida

@@ -300,7 +300,64 @@
     return out.length ? out : FAVORITOS_INICIALES.filter((x) => validos.has(x));
   }
 
+  // ------------------------------------------------------------ estado de vías (ECU 911)
+
+  const normal = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  const palabras = (t) => normal(t).replace(/[^A-Z0-9]+/g, " ").trim();
+
+  /** 3 cerrada, 2 parcialmente habilitada, 1 con restricción u otra novedad. */
+  function gravedadVia(estado) {
+    const e = normal(estado);
+    if (e.startsWith("CERRADA")) return 3;
+    if (e.includes("PARCIAL")) return 2;
+    return 1;
+  }
+
+  /** Vías del ECU 911 que tocan la ruta (por nombre) y las demás novedades en las provincias que cruza. */
+  function viasDeRuta(vias, cfg) {
+    if (!cfg) return { enRuta: [], enProvincias: [] };
+    const provs = new Set((cfg.provincias || []).map(palabras));
+    const locs = (cfg.localidades || []).map(palabras);
+    const codigos = (cfg.carreteras || []).map((c) => palabras(c).replace(/ /g, ""));
+    const tieneCodigo = (texto) => {
+      const t = ` ${palabras(texto).replace(/\bE (\d)/g, "E$1")} `;
+      return codigos.some((c) => t.includes(` ${c} `));
+    };
+    const enRuta = [], enProvincias = [];
+    for (const v of vias || []) {
+      const nombre = ` ${palabras(v.via)} `;
+      const n = locs.filter((l) => nombre.includes(` ${l} `)).length;
+      const prov = provs.has(palabras(v.provincia));
+      const deRuta = (prov || n >= 2) && (n >= 2 || tieneCodigo(`${v.via} ${v.observaciones}`));
+      if (deRuta) enRuta.push(v);
+      else if (prov) enProvincias.push(v);
+    }
+    const orden = (a, b) => gravedadVia(b.estado) - gravedadVia(a.estado) || String(b.modificado).localeCompare(String(a.modificado));
+    return { enRuta: enRuta.sort(orden), enProvincias: enProvincias.sort(orden) };
+  }
+
+  /** Novedades por provincia (nombre normalizado -> vías), para la pestaña Provincias. */
+  function viasPorProvincia(vias) {
+    const out = {};
+    for (const v of vias || []) (out[palabras(v.provincia)] ||= []).push(v);
+    return out;
+  }
+
+  /** "SECTOR SACRE Y KM. 61" -> "Sector sacre y km. 61": el ECU 911 publica todo en mayúsculas. */
+  function oracion(t) {
+    const s = String(t || "").trim().toLowerCase();
+    return s.replace(/(^|[.!?/]\s*)([a-záéíóúñü])/g, (m, a, c) => a + c.toUpperCase());
+  }
+  /** "CUENCA - GIRON -PASAJE" -> "Cuenca - Giron - Pasaje". */
+  function titulo(t) {
+    return String(t || "").trim().toLowerCase().replace(/\s*-\s*/g, " - ")
+      .replace(/(^|[\s(-])([a-záéíóúñü])/g, (m, a, c) => a + c.toUpperCase())
+      .replace(/\b(Km|Via|Vía|Y|De|Del|La|Las|El|Los|A)\b/g, (w, _x, i) => (i === 0 ? w : w.toLowerCase()))
+      .replace(/\bE(\d+)\b/gi, "E$1");
+  }
+
   return {
+    normal, palabras, gravedadVia, viasDeRuta, viasPorProvincia, oracion, titulo,
     H, CLASES, DIAS, MESES, ECUADOR,
     parseLocal, fmtLocal, fechaISO, hora, ahoraLocal, offsetDe, diaRelativo, diaCorto, diaLargo,
     num, deCada10, hace,
