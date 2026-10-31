@@ -49,8 +49,8 @@ button { font: inherit; color: inherit; }
 .mando[aria-pressed="true"] .i-pausa { display: inline; }
 
 .aviso {
-  position: fixed; top: 76px; left: 50%; transform: translateX(-50%); z-index: 7; max-width: min(560px, calc(100vw - 32px));
-  background: rgba(11, 18, 24, .94); border: 1px solid var(--ambar); border-radius: 6px; padding: 8px 12px 6px; font-size: .84rem;
+  max-width: 640px; margin: 0 0 10px; padding: 6px 10px 4px; font-size: .8rem; color: var(--tinta);
+  border-left: 3px solid var(--ambar); background: rgba(11, 18, 24, .7); border-radius: 2px;
 }
 
 /* ------------------------------------------------------------ banda de decisión */
@@ -210,7 +210,6 @@ body.con-hoja .tiempo { visibility: hidden; }
   .hito.extremo .nombre { font-size: 18px; }
   .estacion .etq .u { display: none; }
   .info { top: 120px; right: 12px; max-height: calc(100vh - 380px); }
-  .aviso { top: 120px; }
   .maplibregl-ctrl-bottom-right { bottom: auto; top: 112px; }
 }
 @media (prefers-reduced-motion: reduce) { .estado-carga { transition: none; } }

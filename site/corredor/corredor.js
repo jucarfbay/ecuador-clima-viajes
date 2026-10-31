@@ -476,7 +476,7 @@ function acomodar() {
   if (!S.etiquetas.length) return;
   const puestos = [], ancho = innerWidth, alto = innerHeight;
   // la interfaz fija también ocupa lugar: título, mandos de cámara, banda de decisión y avisos
-  for (const sel of [".tiempo", ".titulo", ".mandos", "#aviso:not([hidden])"]) { const el = $(sel); if (el) puestos.push(el.getBoundingClientRect()); }
+  for (const sel of [".tiempo", ".titulo", ".mandos"]) { const el = $(sel); if (el) puestos.push(el.getBoundingClientRect()); }
   // Los puntos de todas las marcas (estaciones, hitos, vehículo) también son obstáculos para las etiquetas ajenas.
   const puntos = S.etiquetas.filter((e) => !e.el.hidden).map((e) => ({ e, r: e.el.getBoundingClientRect() }));
   let actual = null;
