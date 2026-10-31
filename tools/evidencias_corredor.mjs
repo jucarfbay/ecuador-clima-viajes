@@ -15,7 +15,8 @@ const nav = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-
 
 const TAMANOS = [["1920", 1920, 1080, 1], ["1440", 1440, 900, 1], ["390", 390, 844, 2], ["360", 360, 800, 2]];
 // Cámara fija común (la misma para antes y después).
-const CAMARA = (ancho) => ({ center: [-78.585, -1.15], zoom: ancho < 640 ? 10.05 : 10.95, pitch: 73, bearing: 154 });
+// Mismo encuadre que VISTAS.general() de corredor.js.
+const CAMARA = (ancho) => ({ center: [-78.57, -0.86], zoom: ancho < 640 ? 9.05 : 9.75, pitch: 72, bearing: 172 });
 
 async function listo(p, extraMs = 1200) {
   await p.waitForFunction(() => window.__mapa && window.__mapa.loaded() && document.querySelector("#estado-carga")?.classList.contains("listo"), null, { timeout: 150000 });

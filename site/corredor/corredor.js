@@ -1,4 +1,4 @@
-/* El corredor vivo — Iteración 2 (Latacunga → Ambato → Pelileo → Baños).
+/* El corredor vivo — Iteración 2 (San Rafael, Quito → Machachi → Latacunga → Ambato → Pelileo → Baños).
  *
  * Reglas de datos (no negociables):
  *  - Relieve: elevaciones reales (Terrarium/AWS). Ruta: geometría OSRM sobre OpenStreetMap, versionada; tiempos
@@ -23,7 +23,7 @@ const ESCALA = [
   [2.5, [47, 95, 184]], [5, [107, 63, 179]], [10, [142, 44, 158]],
 ];
 const CORREDOR_KM = 14; // el velo de lluvia se muestra solo en celdas cuyo centro está a esta distancia de la vía
-const FILAS = 24; // filas de la matriz distancia × salida
+const FILAS = 36; // filas de la matriz distancia × salida (~4,5 km cada una)
 const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
@@ -159,14 +159,17 @@ function exposicion(salida) {
 function confianza(t, km) {
   const hor = S.pron?.horaria;
   if (!hor) return null;
-  const h = hitoCercano(km);
-  const serie = hor[h.id];
-  if (!serie) return null;
+  // Hito más cercano que tenga serie del ensamble (San Rafael usa la de Quito, declarada en datos/ruta.json).
+  const conSerie = S.ruta.hitos.filter((x) => hor[x.serie_ensamble || x.id]);
+  if (!conSerie.length) return null;
+  const h = conSerie.reduce((a, x) => (Math.abs(x.km - km) < Math.abs(a.km - km) ? x : a));
+  const id = h.serie_ensamble || h.id, serie = hor[id];
+  const lugar = id === h.id ? h.nombre : (S.pron?.puntos?.find((p) => p.id === id)?.nombre || id);
   const i = serie.tiempos.findIndex((x) => { const fin = localAMs(x); return t < fin && t >= fin - H; });
   if (i < 0) return null;
   const vals = serie.miembros_dmm.map((m) => m[i]).filter((v) => v != null);
   if (!vals.length) return null;
-  return { p: vals.filter((v) => v >= 10).length / vals.length, n: vals.length, lugar: h.nombre };
+  return { p: vals.filter((v) => v >= 10).length / vals.length, n: vals.length, lugar };
 }
 
 // ------------------------------------------------------------------ escena
@@ -213,10 +216,11 @@ function estilo() {
 }
 
 const VISTAS = {
-  // Panorama: desde detrás de Latacunga, a baja altura, con el valle abriéndose hacia el Tungurahua.
-  general: () => ({ center: [-78.585, -1.15], zoom: MOVIL ? 10.05 : 10.95, pitch: 73, bearing: 154 }),
-  cenital: () => ({ center: [-78.53, -1.17], zoom: MOVIL ? 9.2 : 9.85, pitch: 0, bearing: 0 }),
-  intro: () => ({ center: [-78.62, -0.95], zoom: MOVIL ? 8.7 : 9.3, pitch: 50, bearing: 168 }),
+  // Panorama: desde el valle de Machachi hacia el sur, por la avenida de los volcanes: el Cotopaxi a la izquierda,
+  // el valle de Latacunga y Ambato al fondo y el Tungurahua cerrando el corredor.
+  general: () => ({ center: [-78.57, -0.86], zoom: MOVIL ? 9.05 : 9.75, pitch: 72, bearing: 172 }),
+  cenital: () => ({ center: [-78.52, -0.86], zoom: MOVIL ? 8.25 : 8.85, pitch: 0, bearing: 0 }),
+  intro: () => ({ center: [-78.5, -0.5], zoom: MOVIL ? 8.0 : 8.6, pitch: 50, bearing: 176 }),
 };
 
 async function iniciar() {
@@ -231,6 +235,7 @@ async function iniciar() {
     el.textContent = `No se pudieron cargar los datos del corredor (${e.message}). La escena no se muestra con datos incompletos.`;
     return;
   }
+  pintarTitulo();
   prepararLluvia();
   prepararSalidas();
 
@@ -487,6 +492,7 @@ function marcadores() {
   S.vehiculo = marcador(`<span class="hora-v"></span>`, R.coords[0], "vehiculo", { prioridad: 0, variantes: ["der", "izq", "arriba"], plegable: false });
   S.pico = marcador(`<span class="pico-v"></span>`, R.coords[0], "pico", { prioridad: 3, variantes: ["der", "izq", "arriba"] });
   // Referencia geográfica (no dato).
+  marcador(`<span>Cotopaxi</span><small>5.897 m</small>`, [-78.4378, -0.6836], "relieve", { prioridad: 9, variantes: ["arriba"] });
   marcador(`<span>Tungurahua</span><small>5.023 m</small>`, [-78.4422, -1.4675], "relieve", { prioridad: 9, variantes: ["arriba"] });
 }
 
@@ -624,7 +630,7 @@ function prepararSalidas() {
   dibujarMatriz();
 }
 
-/** Matriz distancia × hora de salida: cada columna es una salida; cada fila, un tramo de la ruta (Latacunga arriba). */
+/** Matriz distancia × hora de salida: cada columna es una salida; cada fila, un tramo de la ruta (el origen arriba). */
 function dibujarMatriz() {
   const n = S.salidas.length, total = totalKm();
   const c = $("#matriz");
@@ -640,7 +646,14 @@ function dibujarMatriz() {
   }));
   ctx.putImageData(img, 0, 0);
   // Ejes: hitos a la altura de su km; marcas de día y "ahora".
-  $("#ejes").innerHTML = S.ruta.hitos.map((h) =>
+  // Etiquetas de hitos sin solaparse: los extremos siempre; los intermedios solo si caben (el mapa los muestra todos).
+  const alto = $("#ejes").clientHeight || 66, min = 12, puestos = [];
+  S.ruta.hitos.forEach((h, i) => {
+    const y = (h.km / total) * alto, extremo = i === 0 || i === S.ruta.hitos.length - 1;
+    while (extremo && puestos.length > 1 && y - puestos[puestos.length - 1].y < min) puestos.pop();
+    if (extremo || !puestos.length || y - puestos[puestos.length - 1].y >= min) puestos.push({ h, y });
+  });
+  $("#ejes").innerHTML = puestos.map(({ h }) =>
     `<span style="top:${(h.km / total) * 100}%">${esc(MOVIL ? h.nombre.slice(0, 3) : h.nombre)}</span>`).join("");
   const ahora = Date.now(), marcas = [];
   S.salidas.forEach((t, k) => {
@@ -751,7 +764,8 @@ function recorrer() {
   S.recorriendo = true;
   botonRecorrer(true);
   const m = S.mapa, R = S.ruta, total = totalKm();
-  const durAnim = MOVIL ? 26000 : 30000; // 92 min de viaje en ~30 s
+  // ~30 s por cada 92 min de viaje, entre 30 y 55 s: la ruta larga no se acelera al punto de no poder leerla.
+  const durAnim = Math.max(30000, Math.min(55000, (R.duracion_min / 92) * (MOVIL ? 26000 : 30000)));
   if (!MOV) { // sin vuelo: saltos por hito
     let i = 0;
     const saltar = () => {
@@ -836,13 +850,24 @@ function controles() {
   pintarInfo();
 }
 
+/** Nombre de la ruta y distancia, desde datos/ruta.json (una sola fuente para las cifras). */
+function pintarTitulo() {
+  const R = S.ruta, a = R.hitos[0].nombre, b = R.hitos[R.hitos.length - 1].nombre;
+  const n = document.querySelectorAll(".ruta-nombre > span:not(.flecha)");
+  if (n.length === 2) { n[0].textContent = a; n[1].textContent = b; }
+  $("#titulo-sub").textContent = `${Math.round(R.distancia_km)} km, unas ${horasMin(R.duracion_min)} sin tráfico ni paradas`;
+  $("#escena").setAttribute("aria-label", `Escena 3D del corredor ${a}–${b} sobre relieve real`);
+  $("#hora").setAttribute("aria-label", `Hora de salida (cada columna es una salida; las filas son los tramos de ${a} a ${b})`);
+}
+function horasMin(min) { const h = Math.floor(min / 60), m = Math.round(min % 60); return h ? `${h} h ${String(m).padStart(2, "0")} min` : `${m} min`; }
+
 function pintarInfo() {
   const R = S.ruta, L = S.lluvia;
   const ests = S.estaciones.map(({ e, d }) => `<li>${esc(e.nombre)} (${esc(e.codigo)}, ${esc(e.propietario || "")}), a ${num(d)} km de la vía</li>`).join("");
   $("#info-cuerpo").innerHTML = `
-    <h3>Cómo leer la escena</h3><p>La cortina azul sobre la carretera es la lluvia que encontrarías en cada tramo a la hora en que pasarías: sube ${ALTO_MM} m por cada mm/h. El velo tenue sobre el corredor es la lluvia de la hora indicada en el pie. Abajo, la matriz muestra todas las salidas (columnas) y los tramos (filas, de Latacunga arriba a Baños abajo).</p>
+    <h3>Cómo leer la escena</h3><p>La cortina azul sobre la carretera es la lluvia que encontrarías en cada tramo a la hora en que pasarías: sube ${ALTO_MM} m por cada mm/h. El velo tenue sobre el corredor es la lluvia de la hora indicada en el pie. Abajo, la matriz muestra todas las salidas (columnas) y los tramos (filas, de ${esc(R.hitos[0].nombre)} arriba a ${esc(R.hitos[R.hitos.length - 1].nombre)} abajo).</p>
     <h3>Relieve</h3><p>Terrain Tiles de Mapzen en AWS (base SRTM de ~30 m en Ecuador), sin exagerar la altura. Suaviza quebradas estrechas.</p>
-    <h3>Ruta</h3><p>${esc(R.fuente)}, consultada el ${esc(R.consultado.slice(0, 10))}. ${num(R.distancia_km)} km y ${num(R.duracion_min)} min sin tráfico ni paradas: duración total de OSRM; los tiempos por tramo son sus anotaciones escaladas a esa cifra. ${esc(R.licencia)}.</p>
+    <h3>Ruta</h3><p>${esc(R.fuente)}, consultada el ${esc(R.consultado.slice(0, 10))}.${R.origen ? ` Origen: ${esc(R.origen.nombre || R.origen.consulta)} según ${esc(R.origen.fuente)}.` : ""}${R.hitos.filter((h) => h.tipo === "paso").map((h) => ` ${esc(h.nombre)} se ubica en la vía, sin desviar la ruta hacia su centro.`).join("")} ${num(R.distancia_km)} km y ${num(R.duracion_min)} min sin tráfico ni paradas: duración total de OSRM; los tiempos por tramo son sus anotaciones escaladas a esa cifra. ${esc(R.licencia)}.</p>
     <h3>Lluvia prevista</h3><p>${esc(L.modelo)}, producto ${esc(L.producto)}, ${esc(L.rejilla)}. ${esc(L.seleccion)}. Corrida iniciada ${esc(L.corrida_inicio_utc || "sin dato")} (UTC). Determinista: un solo escenario. La confianza del punto más lluvioso sale del ensamble ECMWF de 51 escenarios en la localidad más cercana de la ruta.</p>
     <h3>Lluvia medida</h3><ul>${ests || "<li>Ninguna estación a menos de 7 km de la vía.</li>"}</ul><p>Visor del INAMHI, sin control de calidad publicado. Mover la hora de salida no cambia las mediciones.</p>
     <h3>Ambientación</h3><p>Cielo, bruma y color de luz son de representación, no datos. La dirección de la luz y la penumbra siguen la posición aproximada del sol a la hora de validez (astronomía); no indican nubosidad. No hay nubes porque el sistema no tiene datos de nubosidad del corredor.</p>

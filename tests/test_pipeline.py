@@ -227,6 +227,10 @@ class TestPipeline(unittest.TestCase):
         self.assertAlmostEqual(c["paso_lat"], 0.07, places=3)
         self.assertAlmostEqual(c["paso_lon"], 0.07, places=3)
         self.assertEqual(c["corrida_inicio_utc"], "2026-10-30T18:00+00:00")
+        self.assertEqual(c["bbox"], run.CORREDOR_BBOX)  # el recuadro viaja con los datos: si cambia, no se reutiliza
+        ruta = json.loads((RAIZ / "site/corredor/datos/ruta.json").read_text(encoding="utf-8"))
+        b = c["bbox"]
+        self.assertTrue(all(b["lat_s"] <= la <= b["lat_n"] and b["lon_o"] <= lo <= b["lon_e"] for lo, la in ruta["coords"]))
         self.assertIn("O1280", c["rejilla"])
         # Ventana: 24 h antes y 72 h después de la próxima hora (21:00 del 29). La serie falsa empieza el 29 a las
         # 00:00, así que de las 24 h pasadas solo hay 21; termina a las 20:00 del 1 de noviembre.
@@ -264,6 +268,15 @@ class TestRutaCorredor(unittest.TestCase):
         self.assertAlmostEqual(r["s"][-1], 120.0)
         self.assertAlmostEqual(r["hitos"][1]["min"], 2.0)
         self.assertEqual(ruta_corredor.escalar_tiempos(r)["s"], r["s"])  # idempotente
+        # Pasos de referencia: se ubican en el vértice más cercano, sin cambiar la geometría, y se ordenan por km.
+        r2 = {"coords": [[-78.0, 0.0], [-78.0, -0.01], [-78.0, -0.02]], "km": [0.0, 1.1, 2.2], "s": [0, 60, 120],
+              "hitos": [{"id": "a", "km": 0.0}, {"id": "c", "km": 2.2}]}
+        ruta_corredor.ubicar_pasos(r2, [{"id": "b", "nombre": "B", "lat": -0.0102, "lon": -78.001}])
+        self.assertEqual([h["id"] for h in r2["hitos"]], ["a", "b", "c"])
+        self.assertEqual(r2["hitos"][1]["vertice"], 1)
+        self.assertEqual(len(r2["coords"]), 3)
+        with self.assertRaises(ValueError):  # demasiado lejos de la vía: no se inventa un paso
+            ruta_corredor.ubicar_pasos(r2, [{"id": "x", "nombre": "X", "lat": -0.2, "lon": -78.0}])
         publicada = json.loads((RAIZ / "site/corredor/datos/ruta.json").read_text(encoding="utf-8"))
         self.assertAlmostEqual(publicada["s"][-1] / 60, publicada["duracion_min"], places=1)
         self.assertAlmostEqual(publicada["hitos"][-1]["min"], publicada["duracion_min"], places=1)

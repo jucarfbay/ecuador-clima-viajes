@@ -13,7 +13,7 @@
   --ambar: #F2B45A;          /* medido: estaciones */
   --sol: #F3E3BF;            /* la vía y la salida elegida */
   --lluvia-1: #9CC8EC; --lluvia-2: #4B8FD6; --lluvia-3: #2F5FB8; --lluvia-4: #6B3FB3; /* pronóstico */
-  --alto-matriz: 66px;
+  --alto-matriz: 78px;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -75,27 +75,27 @@ button { font: inherit; color: inherit; }
 .tenue { color: var(--tinta-2); }
 
 .matriz-marco { display: grid; grid-template-columns: 76px 1fr; gap: 8px; }
-.ejes { position: relative; height: 66px; font-size: .7rem; color: var(--tinta-2); }
+.ejes { position: relative; height: var(--alto-matriz); font-size: .7rem; color: var(--tinta-2); }
 .ejes span { position: absolute; right: 0; transform: translateY(-50%); white-space: nowrap; }
 .ejes span::after { content: ""; display: inline-block; width: 6px; height: 1px; background: rgba(236, 239, 234, .5); margin-left: 4px; vertical-align: middle; }
-.pista { position: relative; height: 84px; }
-#matriz { position: absolute; left: 0; top: 0; width: 100%; height: 66px; image-rendering: pixelated; background: rgba(236, 239, 234, .03); border-radius: 2px; }
+.pista { position: relative; height: calc(var(--alto-matriz) + 18px); }
+#matriz { position: absolute; left: 0; top: 0; width: 100%; height: var(--alto-matriz); image-rendering: pixelated; background: rgba(236, 239, 234, .03); border-radius: 2px; }
 .viaje-banda {
-  position: absolute; top: -3px; height: 72px; min-width: 6px; border: 2px solid var(--sol); border-radius: 2px;
+  position: absolute; top: -3px; height: calc(var(--alto-matriz) + 6px); min-width: 6px; border: 2px solid var(--sol); border-radius: 2px;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); pointer-events: none;
 }
 .viaje-banda::after {
   content: attr(data-hora); position: absolute; left: 50%; bottom: calc(100% + 2px); transform: translateX(-50%);
   font-size: .72rem; font-weight: 800; color: var(--obsidiana); background: var(--sol); padding: 1px 5px 0; border-radius: 2px; white-space: nowrap;
 }
-/* el tramo más lluvioso de la salida elegida, dentro de su columna (escala de 66 px de la matriz) */
+/* el tramo más lluvioso de la salida elegida, dentro de su columna (en la escala de --alto-matriz) */
 .banda-pico { position: absolute; left: -5px; right: -5px; height: 3px; margin-top: 1px; background: var(--lluvia-1); box-shadow: 0 0 0 1px #000; transform: translateY(calc(-50% + 0px)); max-height: 3px; }
-.mejor { position: absolute; top: 68px; width: 0; height: 0; transform: translateX(-50%); border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid #9fe0c0; }
-.marcas { position: absolute; left: 0; right: 0; top: 70px; height: 14px; font-size: .68rem; color: var(--tinta-2); }
+.mejor { position: absolute; top: calc(var(--alto-matriz) + 2px); width: 0; height: 0; transform: translateX(-50%); border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid #9fe0c0; }
+.marcas { position: absolute; left: 0; right: 0; top: calc(var(--alto-matriz) + 4px); height: 14px; font-size: .68rem; color: var(--tinta-2); }
 .marcas span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .marcas span.dia { color: var(--tinta); font-weight: 600; transform: none; border-left: 1px solid rgba(236, 239, 234, .4); padding-left: 4px; }
 .marcas span.ahora { color: var(--ambar); }
-#hora { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: 68px; margin: 0; opacity: 0; cursor: ew-resize; }
+#hora { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: calc(var(--alto-matriz) + 2px); margin: 0; opacity: 0; cursor: ew-resize; }
 .pista:focus-within .viaje-banda { box-shadow: 0 0 0 3px rgba(243, 227, 191, .45); }
 
 .pie { margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; font-size: .74rem; color: var(--tinta-2); }
@@ -204,12 +204,6 @@ body.con-hoja .tiempo { visibility: hidden; }
   .decision .otra { font-size: .8rem; }
   .matriz-marco { grid-template-columns: 30px 1fr; gap: 6px; }
   :root { --alto-matriz: 54px; }
-  .ejes, #matriz { height: 54px; }
-  .viaje-banda { height: 60px; }
-  .mejor { top: 56px; }
-  .marcas { top: 58px; }
-  #hora { height: 56px; }
-  .pista { height: 72px; }
   .pie { font-size: .68rem; gap: 2px 10px; }
   .pie .leyenda { width: 80px; }
   .hito .nombre { font-size: 16px; }

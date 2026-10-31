@@ -4,18 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>El corredor vivo</title>
-  <meta name="description" content="Prueba técnica: el corredor Latacunga–Ambato–Pelileo–Baños en relieve real, con la lluvia prevista a la hora en que pasarías.">
+  <meta name="description" content="Prueba técnica: el corredor San Rafael (Quito)–Latacunga–Ambato–Baños en relieve real, con la lluvia prevista a la hora en que pasarías.">
   <meta name="theme-color" content="#0B1218">
   <link rel="preload" href="fuentes/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../vendor/maplibre/maplibre-gl.css">
   <link rel="stylesheet" href="corredor.css">
 </head>
 <body>
-  <div id="escena" aria-label="Escena 3D del corredor Latacunga–Baños sobre relieve real"></div>
+  <div id="escena" aria-label="Escena 3D del corredor San Rafael–Baños sobre relieve real"></div>
 
   <header class="titulo">
-    <p class="ruta-nombre"><span>Latacunga</span><span class="flecha" aria-hidden="true">→</span><span>Baños</span></p>
-    <p id="titulo-sub" class="titulo-sub">80 km por la E35 y la vía a Baños</p>
+    <p class="ruta-nombre"><span>San Rafael</span><span class="flecha" aria-hidden="true">→</span><span>Baños</span></p>
+    <p id="titulo-sub" class="titulo-sub">Por la E35 y la vía a Baños</p>
   </header>
 
   <div class="mandos" role="group" aria-label="Cámara">
@@ -37,7 +37,7 @@
         <canvas id="matriz" aria-hidden="true"></canvas>
         <div id="mejor" class="mejor" aria-hidden="true" hidden></div>
         <div id="viaje-banda" class="viaje-banda" aria-hidden="true"><span id="banda-pico" class="banda-pico" hidden></span></div>
-        <input id="hora" type="range" min="0" max="95" step="1" value="0" aria-label="Hora de salida (cada columna es una salida; las filas son los tramos de Latacunga a Baños)">
+        <input id="hora" type="range" min="0" max="95" step="1" value="0" aria-label="Hora de salida (cada columna es una salida; las filas son los tramos de San Rafael a Baños)">
         <div id="marcas" class="marcas" aria-hidden="true"></div>
       </div>
     </div>
