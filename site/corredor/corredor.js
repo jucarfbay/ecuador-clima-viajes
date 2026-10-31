@@ -235,11 +235,15 @@ async function iniciar() {
 function capas() {
   const m = S.mapa, R = S.ruta;
   m.addSource("lluvia", { type: "geojson", data: S.lluvia._geo });
+  texturasLluvia();
   m.addLayer({ id: "lluvia", type: "fill", source: "lluvia",
     paint: {
       "fill-color": ["step", ["get", "v"], "rgba(0,0,0,0)", ...ESCALA.flatMap(([u, c]) => [u, `rgb(${c.join(",")})`])],
       "fill-opacity": ["interpolate", ["linear"], ["get", "v"], 0.09, 0, 0.1, 0.06, 1, 0.24, 5, 0.44, 10, 0.56], "fill-antialias": false,
     } });
+  // Trazo de lluvia dentro de cada celda: más denso cuanto más intensa. Es la misma cifra del modelo, no más detalle.
+  m.addLayer({ id: "lluvia-trazo", type: "fill", source: "lluvia", filter: [">=", ["get", "v"], 0.1],
+    paint: { "fill-pattern": ["step", ["get", "v"], "lluvia-t1", 1, "lluvia-t2", 2.5, "lluvia-t3", 5, "lluvia-t4"], "fill-opacity": 0.55 } });
   // Bordes de celda muy tenues: la resolución real del modelo queda a la vista.
   m.addLayer({ id: "lluvia-celdas", type: "line", source: "lluvia", filter: [">=", ["get", "v"], 0.1],
     paint: { "line-color": "rgba(156,200,236,0.22)", "line-width": 0.7 } });
@@ -267,6 +271,25 @@ function capas() {
       "line-color": ["case", ["get", "recorrido"], "rgba(243,227,191,0.5)", "rgb(243,227,191)"],
       "line-width": ancho(4.2), "line-opacity": ["get", "visible"],
     } });
+}
+
+/** Cuatro texturas de lluvia (trazos inclinados) del mismo color que la escala. Se dibujan una vez en un lienzo. */
+function texturasLluvia() {
+  const defs = [["lluvia-t1", 1, ESCALA[0][1]], ["lluvia-t2", 2, ESCALA[2][1]], ["lluvia-t3", 3, ESCALA[3][1]], ["lluvia-t4", 4, ESCALA[5][1]]];
+  for (const [nombre, n, col] of defs) {
+    const t = 32, c = document.createElement("canvas");
+    c.width = c.height = t;
+    const x = c.getContext("2d");
+    x.strokeStyle = `rgba(${col.join(",")},0.95)`;
+    x.lineWidth = 1.4;
+    x.lineCap = "round";
+    // n trazos por mosaico, repartidos para que el patrón no forme franjas
+    for (let k = 0; k < n * 2; k++) {
+      const px = ((k * 13 + 5) % t), py = ((k * 19 + 3) % t);
+      x.beginPath(); x.moveTo(px, py); x.lineTo(px - 3, py + 8); x.stroke();
+    }
+    S.mapa.addImage(nombre, x.getImageData(0, 0, t, t), { pixelRatio: 2 });
+  }
 }
 
 /** Tramos con la lluvia a la hora de paso. `hasta` (0–1) revela el trazo; `vehiculoKm` marca lo ya recorrido. */
@@ -335,7 +358,8 @@ function marcadores() {
   for (let seg = 900; seg < fin - 300; seg += 900) {
     const km = kmEnSegundos(seg);
     if (S.ruta.hitos.some((h) => Math.abs(h.km - km) < 5.5)) continue; // no tapar los hitos
-    S.marcas.push({ seg, m: marcador(`<span class="t"></span>`, puntoEnKm(km), "marca-t", "left") });
+    // solo las marcas de cada media hora llevan la hora escrita; las demás son un trazo
+    S.marcas.push({ seg, m: marcador(`<span class="t"></span>`, puntoEnKm(km), `marca-t${seg % 1800 ? " corta" : ""}`, "left") });
   }
   // Referencia geográfica (no dato): el volcán que domina el final del corredor.
   const tg = marcador(`<span class="triangulo" aria-hidden="true"></span><span>Tungurahua, 5.023 m</span>`, [-78.4422, -1.4675], "relieve-nombre");
@@ -375,7 +399,7 @@ function estaciones() {
     el.type = "button";
     el.className = `estacion${vigente ? "" : " atrasada"}`;
     el.setAttribute("aria-label", `Estación ${e.nombre}: ${num(e.mm_24h)} mm en 24 horas hasta las ${hhmm(Date.parse(e.ultimo))}`);
-    el.innerHTML = `<span class="placa"><b>${num(e.mm_24h)} mm</b> en 24 h<small>${esc(e.codigo)}, medido hasta ${hhmm(Date.parse(e.ultimo))}</small></span><span class="tallo"></span><span class="base"></span>`;
+    el.innerHTML = `<span class="placa"><b>${num(e.mm_24h)} mm</b><span class="u"> en 24 h</span><small>${esc(e.codigo)}, medido hasta ${hhmm(Date.parse(e.ultimo))}</small></span><span class="tallo"></span><span class="base"></span>`;
     const pop = new ML.Popup({ offset: [0, -64], maxWidth: "320px", closeButton: true }).setHTML(instrumento(e, d, vigente, atraso));
     new ML.Marker({ element: el, anchor: "bottom", opacityWhenCovered: "0.8" }).setLngLat([e.lon, e.lat]).setPopup(pop).addTo(S.mapa);
   }
@@ -523,15 +547,15 @@ function recorrer() {
   const camara = (km) => {
     const dh = Math.min(...R.hitos.map((h) => Math.abs(h.km - km)));
     return {
-      rumbo: rumbo(puntoEnKm(Math.max(0, km - 0.8)), puntoEnKm(Math.min(total, km + 2.4))),
+      rumbo: rumbo(puntoEnKm(Math.max(0, km - 1.0)), puntoEnKm(Math.min(total, km + 3.2))),
       // se eleva al acercarse a cada hito para mostrar el contexto, y baja entre hitos
-      zoom: (MOVIL ? 11.75 : 12.4) - 0.8 * Math.exp(-(dh ** 2) / (2 * 2.4 ** 2)),
-      centro: puntoEnKm(Math.min(total, km + 1.0)),
+      zoom: (MOVIL ? 11.5 : 12.05) - 0.7 * Math.exp(-(dh ** 2) / (2 * 2.4 ** 2)),
+      centro: puntoEnKm(Math.min(total, km + 1.6)),
     };
   };
   const c0 = camara(km0);
   moverVehiculo(km0);
-  m.easeTo({ center: c0.centro, bearing: c0.rumbo, pitch: 64, zoom: c0.zoom, duration: 2600, essential: true });
+  m.easeTo({ center: c0.centro, bearing: c0.rumbo, pitch: 74, zoom: c0.zoom, duration: 2600, essential: true });
   let rumboSuave = c0.rumbo, zoomSuave = c0.zoom, centro = c0.centro, inicio = null, previo = null, ultimoPintado = -1;
   const paso = (ahoraMs) => {
     if (!S.recorriendo) return;
@@ -547,7 +571,7 @@ function recorrer() {
     rumboSuave = (rumboSuave + angDif(rumboSuave, c.rumbo) * suave(900) + 360) % 360;
     zoomSuave += (c.zoom - zoomSuave) * suave(1200);
     centro = [centro[0] + (c.centro[0] - centro[0]) * suave(350), centro[1] + (c.centro[1] - centro[1]) * suave(350)];
-    m.jumpTo({ center: centro, bearing: rumboSuave, pitch: 64, zoom: zoomSuave });
+    m.jumpTo({ center: centro, bearing: rumboSuave, pitch: 74, zoom: zoomSuave });
     pintarCampo(horaDe(t));
     if (Math.abs(km - ultimoPintado) > 0.4) { pintarRuta(1, km); ultimoPintado = km; }
     pintarLectura(t);
