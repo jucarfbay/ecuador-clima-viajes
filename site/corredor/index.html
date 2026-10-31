@@ -36,12 +36,17 @@
       <div class="pista" id="pista">
         <canvas id="matriz" aria-hidden="true"></canvas>
         <div id="mejor" class="mejor" aria-hidden="true" hidden></div>
-        <div id="viaje-banda" class="viaje-banda" aria-hidden="true"></div>
+        <div id="viaje-banda" class="viaje-banda" aria-hidden="true"><span id="banda-pico" class="banda-pico" hidden></span></div>
         <input id="hora" type="range" min="0" max="95" step="1" value="0" aria-label="Hora de salida (cada columna es una salida; las filas son los tramos de Latacunga a Baños)">
         <div id="marcas" class="marcas" aria-hidden="true"></div>
       </div>
     </div>
     <p id="pie" class="pie"></p>
+  </section>
+
+  <section id="hoja" class="hoja" aria-label="Lectura de la estación" hidden>
+    <button type="button" class="cerrar" id="hoja-cerrar" aria-label="Cerrar la lectura y volver a la línea de tiempo">×</button>
+    <div id="hoja-cuerpo"></div>
   </section>
 
   <aside id="info" class="info" tabindex="-1" hidden>

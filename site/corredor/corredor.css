@@ -13,12 +13,13 @@
   --ambar: #F2B45A;          /* medido: estaciones */
   --sol: #F3E3BF;            /* la vía y la salida elegida */
   --lluvia-1: #9CC8EC; --lluvia-2: #4B8FD6; --lluvia-3: #2F5FB8; --lluvia-4: #6B3FB3; /* pronóstico */
+  --alto-matriz: 66px;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--obsidiana); color: var(--tinta); overflow: hidden; }
 body { font-family: "Overpass", system-ui, sans-serif; font-size: 15px; line-height: 1.4; font-variant-numeric: tabular-nums; }
-#escena { position: fixed; inset: 0; }
+#escena { position: fixed; inset: 0; z-index: 0; } /* contexto propio: nada del mapa se dibuja sobre la interfaz */
 /* Viñeta: concentra la mirada en el valle y da asiento al título y a la banda. Solo luz, no dato. */
 body::after {
   content: ""; position: fixed; inset: 0; z-index: 1; pointer-events: none;
@@ -87,6 +88,8 @@ button { font: inherit; color: inherit; }
   content: attr(data-hora); position: absolute; left: 50%; bottom: calc(100% + 2px); transform: translateX(-50%);
   font-size: .72rem; font-weight: 800; color: var(--obsidiana); background: var(--sol); padding: 1px 5px 0; border-radius: 2px; white-space: nowrap;
 }
+/* el tramo más lluvioso de la salida elegida, dentro de su columna (escala de 66 px de la matriz) */
+.banda-pico { position: absolute; left: -5px; right: -5px; height: 3px; margin-top: 1px; background: var(--lluvia-1); box-shadow: 0 0 0 1px #000; transform: translateY(calc(-50% + 0px)); max-height: 3px; }
 .mejor { position: absolute; top: 68px; width: 0; height: 0; transform: translateX(-50%); border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid #9fe0c0; }
 .marcas { position: absolute; left: 0; right: 0; top: 70px; height: 14px; font-size: .68rem; color: var(--tinta-2); }
 .marcas span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
@@ -168,6 +171,14 @@ button { font: inherit; color: inherit; }
 .info a { color: var(--lluvia-1); }
 .info .cerrar { position: absolute; top: 6px; right: 6px; width: 40px; height: 40px; background: none; border: 0; font-size: 1.3rem; color: var(--tinta-2); cursor: pointer; }
 
+.hoja {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; max-height: 62vh; overflow: auto;
+  background: rgba(11, 18, 24, .98); border-top: 2px solid var(--ambar); border-radius: 12px 12px 0 0;
+  padding: 14px 16px max(14px, env(safe-area-inset-bottom));
+}
+.hoja .cerrar { position: absolute; top: 6px; right: 6px; width: 44px; height: 44px; background: none; border: 0; font-size: 1.5rem; color: var(--tinta-2); cursor: pointer; }
+body.con-hoja .tiempo { visibility: hidden; }
+
 .estado-carga { position: fixed; inset: 0; display: grid; place-items: center; z-index: 20; background: var(--obsidiana); color: var(--tinta-2); font-family: "Fraunces", Georgia, serif; font-size: 1.2rem; transition: opacity .8s; }
 .estado-carga.listo { opacity: 0; pointer-events: none; }
 .estado-carga.error { color: var(--tinta); font-family: "Overpass", sans-serif; font-size: 1rem; padding: 24px; text-align: center; }
@@ -191,6 +202,7 @@ button { font: inherit; color: inherit; }
   .decision .conf { display: block; margin-left: 0; font-size: .74rem; border: 0; }
   .decision .otra { font-size: .8rem; }
   .matriz-marco { grid-template-columns: 30px 1fr; gap: 6px; }
+  :root { --alto-matriz: 54px; }
   .ejes, #matriz { height: 54px; }
   .viaje-banda { height: 60px; }
   .mejor { top: 56px; }

@@ -289,11 +289,12 @@ function avisarFallo(forzar = false) {
 function capas() {
   const m = S.mapa, R = S.ruta;
   // 1. Velo del campo de lluvia: solo en el corredor y tenue. Cada bloque es una celda nativa (~8 km): su borde
-  //    recto ya muestra la resolución real, sin dibujar una rejilla encima.
+  //    recto ya muestra la resolución real, sin dibujar una rejilla encima. Desde 0,5 mm/h: la llovizna solo se ve en
+  //    la cortina y en la matriz, para que el velo no cubra todo el valle.
   m.addSource("lluvia", { type: "geojson", data: S.lluvia._geo });
-  m.addLayer({ id: "lluvia", type: "fill", source: "lluvia", filter: ["all", ["get", "cerca"], [">=", ["get", "mm"], 0.1]],
+  m.addLayer({ id: "lluvia", type: "fill", source: "lluvia", filter: ["all", ["get", "cerca"], [">=", ["get", "mm"], 0.5]],
     paint: { "fill-color": pasoColor(), "fill-antialias": false,
-      "fill-opacity": ["interpolate", ["linear"], ["get", "mm"], 0.1, 0.07, 1, 0.13, 5, 0.2, 10, 0.24] } });
+      "fill-opacity": ["interpolate", ["linear"], ["get", "mm"], 0.5, 0.05, 1, 0.09, 5, 0.15, 10, 0.19] } });
 
 
   // 2. La vía y su sombra (tramos de ~0,4 km para marcar lo recorrido).
@@ -394,11 +395,11 @@ function luz(tMs) {
   ultimaLuz = clave;
   const mezcla = (a, b) => a.map((x, i) => Math.round(x + (b[i] - x) * crep));
   const rgb = (c) => `rgb(${c.join(",")})`;
-  m.setPaintProperty("satelite", "raster-brightness-max", 0.3 + 0.42 * crep);
+  m.setPaintProperty("satelite", "raster-brightness-max", 0.38 + 0.34 * crep);
   m.setPaintProperty("satelite", "raster-saturation", -0.35 + 0.43 * crep);
   m.setPaintProperty("sombras", "hillshade-illumination-direction", s0.dia ? s0.azimut : 292);
   m.setPaintProperty("sombras", "hillshade-illumination-altitude", s0.dia ? Math.max(14, Math.min(42, s0.altura)) : 30);
-  m.setPaintProperty("sombras", "hillshade-highlight-color", crep > 0.05 ? `rgba(255,196,128,${0.18 + 0.24 * crep})` : "rgba(150,180,220,0.14)");
+  m.setPaintProperty("sombras", "hillshade-highlight-color", crep > 0.05 ? `rgba(255,196,128,${0.18 + 0.24 * crep})` : "rgba(160,190,230,0.24)");
   // de noche la cortina y la vía mandan: se aclaran un poco para mantener la lectura
   m.setPaintProperty("cortina", "fill-extrusion-opacity", 0.72 + 0.14 * (1 - crep));
   m.setSky({
@@ -460,7 +461,17 @@ function acomodar() {
     }
     if (!ok) {
       if (e.plegable) e.el.classList.add("plegada");
-      else { e.el.classList.add(e.variantes[0]); puestos.push(etq.getBoundingClientRect()); }
+      else {
+        // imprescindible: la primera posición que quepa en pantalla, aunque roce otra etiqueta
+        let elegida = e.variantes[0];
+        for (const v of e.variantes) {
+          e.el.classList.add(v);
+          const r = etq.getBoundingClientRect();
+          e.el.classList.remove(v);
+          if (r.left >= 0 && r.right <= ancho) { elegida = v; break; }
+        }
+        e.el.classList.add(elegida); puestos.push(etq.getBoundingClientRect());
+      }
     }
     puestos.push(punto);
   }
@@ -519,9 +530,24 @@ function estaciones() {
 function enfocarEstacion(e, mk, pop) {
   detener();
   const m = S.mapa;
-  const abrir = () => { pop.setLngLat([e.lon, e.lat]).addTo(m); };
-  const destino = { center: [e.lon, e.lat], zoom: MOVIL ? 11.6 : 12.2, pitch: 58, bearing: m.getBearing(), offset: [0, MOVIL ? 120 : 90] };
+  // En el teléfono el instrumento es una hoja inferior que reemplaza a la banda mientras está abierta (no se tapan).
+  const abrir = MOVIL ? () => abrirHoja(pop.getElement()?.innerHTML || pop._content?.innerHTML || "", e) : () => { pop.setLngLat([e.lon, e.lat]).addTo(m); };
+  const destino = { center: [e.lon, e.lat], zoom: MOVIL ? 11.4 : 12.2, pitch: 58, bearing: m.getBearing(), offset: [0, MOVIL ? -140 : 90] };
   if (MOV) { m.once("moveend", abrir); m.flyTo({ ...destino, duration: 1800, essential: true }); } else { m.jumpTo(destino); abrir(); }
+}
+
+function abrirHoja(_html, e) {
+  const hoja = $("#hoja");
+  const d = S.estaciones.find((x) => x.e === e)?.d ?? null;
+  const atraso = (Date.now() - Date.parse(e.ultimo)) / H;
+  $("#hoja-cuerpo").innerHTML = instrumento(e, d, atraso <= (S.obs.vigencia_h || 3), atraso);
+  hoja.hidden = false;
+  document.body.classList.add("con-hoja");
+  $("#hoja-cerrar").focus();
+}
+function cerrarHoja() {
+  $("#hoja").hidden = true;
+  document.body.classList.remove("con-hoja");
 }
 
 /** Lupa de contraste: misma celda nativa, mismas horas y misma variable (lluvia de la hora), solo si hay ambas series. */
@@ -644,11 +670,15 @@ function elegirSalida(k, { mover = true } = {}) {
 function pintarPico() {
   const ex = S.exposiciones[S.k];
   const el = S.pico.getElement();
-  if (!ex || ex.peor.mm < 0.1) { el.hidden = true; return; }
+  if (!ex || ex.peor.mm < 0.1) { el.hidden = true; $("#banda-pico").hidden = true; return; }
   el.hidden = false;
   const v = ex.peor.v;
   S.pico.setLngLat(S.ruta.coords[v]);
   el.querySelector(".pico-v").innerHTML = `<b>${num(ex.peor.mm)} mm/h</b> ${hhmm(S.salidas[S.k] + S.ruta.s[v] * 1000)}`;
+  // el mismo tramo, marcado en la columna de la matriz
+  const marca = $("#banda-pico");
+  marca.hidden = false;
+  marca.style.top = `calc(3px + ${(S.ruta.km[v] / totalKm()).toFixed(4)} * var(--alto-matriz))`;
 }
 
 function pintarDecision(tVehiculo = null) {
@@ -793,7 +823,8 @@ function controles() {
   const abrir = (on) => { info.hidden = !on; b.setAttribute("aria-expanded", String(on)); if (on) info.focus(); };
   b.addEventListener("click", () => abrir(info.hidden));
   $("#info-cerrar").addEventListener("click", () => abrir(false));
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") abrir(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { abrir(false); cerrarHoja(); } });
+  $("#hoja-cerrar").addEventListener("click", cerrarHoja);
   pintarInfo();
 }
 

@@ -129,7 +129,14 @@ for (const [tag, ancho, alto, escala] of [["1440", 1440, 900, 1], ["390", 390, 8
     await est.click();
     await p.waitForTimeout(2600); await listo(p, 300);
     const texto = await p.evaluate(() => document.querySelector(".instrumento")?.innerText || "sin instrumento");
-    log(`[estacion-${tag}] instrumento: ${texto.replace(/\s+/g, " ").slice(0, 400)}`);
+    log(`[estacion-${tag}] instrumento: ${texto.replace(/\s+/g, " ").slice(0, 700)}`);
+    log(`[estacion-${tag}] ¿instrumento visible y sin tapar? ${await p.evaluate(() => {
+      const el = document.querySelector("#hoja:not([hidden]) .instrumento") || document.querySelector(".maplibregl-popup .instrumento");
+      if (!el) return "no";
+      const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + Math.min(r.height / 2, 60);
+      const arriba = document.elementFromPoint(x, y);
+      return el.contains(arriba) ? "sí" : "tapado por " + (arriba?.className || arriba?.tagName);
+    })}`);
     await p.screenshot({ path: `${OUT}/despues-${tag}-estacion.png` });
   });
 }
