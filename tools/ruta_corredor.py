@@ -139,7 +139,9 @@ def construir(respuesta: dict, hitos: list[dict], url: str, consultado: str) -> 
 def geocodificar(o: dict) -> dict:
     """Coordenada del origen según OpenStreetMap (Nominatim), con la fuente para citarla."""
     import urllib.parse
-    q = urllib.parse.urlencode({"q": o["consulta"], "format": "jsonv2", "limit": 1, "countrycodes": "ec"})
+    # featureType=settlement: el lugar poblado (parroquia o barrio), no un comercio que lleve su nombre.
+    q = urllib.parse.urlencode({"q": o["consulta"], "format": "jsonv2", "limit": 1, "countrycodes": "ec",
+                                "featureType": "settlement"})
     req = urllib.request.Request(f"{NOMINATIM}?{q}", headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=60) as resp:
         r = json.loads(resp.read().decode("utf-8"))
