@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import calculo
-from .fuentes import (MODELOS, Http, alta_resolucion_rejilla, ensamble, estaciones_inamhi, hres_corredor, meta_modelo,
+from .fuentes import (CORREDOR_BBOX, MODELOS, Http, alta_resolucion_rejilla, ensamble, estaciones_inamhi, hres_corredor, meta_modelo,
                       vias_ecu911)
 
 ECU = timezone(timedelta(hours=-5))
@@ -234,6 +234,7 @@ def corredor_lluvia(http: Http, ahora: datetime):
         "seleccion": "celda nativa más cercana (cell_selection=nearest); sin interpolación",
         "corrida_inicio_utc": meta.get("corrida_inicio"),
         "corrida_disponible_utc": meta.get("corrida_disponible"),
+        "bbox": CORREDOR_BBOX,
         "paso_lat": _paso_mediano(lats), "paso_lon": _paso_lon_por_fila(r["celdas"]),
         "celdas": r["celdas"],
         "tiempos": [r["tiempos"][i] for i in sel],
@@ -380,7 +381,8 @@ def main(argv=None):
                 escribir(salida / "pronostico.json", prev_pron)
     # Corredor: celdas nativas HRES, cada vez que se recalcula el pronóstico (o si falta).
     prev_corr = leer_previo(a.previo, "corredor_lluvia.json")
-    if prev_corr and vigente and edad_h(prev_corr, ahora) < a.vigencia_h:
+    # Se reutiliza solo si cubre el mismo recuadro: si el corredor cambia, se recalcula aunque el pronóstico siga vigente.
+    if prev_corr and vigente and edad_h(prev_corr, ahora) < a.vigencia_h and prev_corr.get("bbox") == CORREDOR_BBOX:
         escribir(salida / "corredor_lluvia.json", prev_corr)
         estado["fuentes"]["corredor"] = {"generado": prev_corr["generado"], "accion": "reutilizado"}
     else:

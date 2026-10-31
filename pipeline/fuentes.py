@@ -232,7 +232,7 @@ def vias_ecu911(http: Http, lote: int = 200) -> list[dict]:
 
 # ---------------------------------------------------------------- corredor (prueba "El corredor vivo")
 
-CORREDOR_BBOX = {"lat_n": -0.85, "lat_s": -1.50, "lon_o": -78.75, "lon_e": -78.30}  # Latacunga–Baños con margen
+CORREDOR_BBOX = {"lat_n": -0.22, "lat_s": -1.50, "lon_o": -78.75, "lon_e": -78.30}  # San Rafael (Quito)–Baños con margen
 
 
 def meta_modelo(http: Http, modelo: str) -> dict:

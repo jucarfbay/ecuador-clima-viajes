@@ -1,6 +1,7 @@
 name: "Corredor: ruta"
 
-# Geometría vial Latacunga → Ambato → Pelileo → Baños desde OSRM/OpenStreetMap. Se ejecuta a mano y el
+# Geometría vial San Rafael (Quito) → Machachi → Latacunga → Ambato → Pelileo → Baños desde OSRM/OpenStreetMap
+# (origen geocodificado con Nominatim). Se ejecuta a mano y el
 # resultado queda versionado (con fuente y fecha) en site/corredor/datos/ruta.json.
 on:
   workflow_dispatch:

@@ -39,6 +39,23 @@ jobs:
             for f in corredor_lluvia.json estaciones.json pronostico.json vias.json estado.json; do
               curl -fsS "https://jucarfbay.github.io/ecuador-clima-viajes/data/$f" -o "site/data/$f" || echo "sin $f"
             done
+            # Si el corredor de esta versión cubre otro recuadro que el publicado, la lluvia del corredor se recalcula
+            # aquí con el mismo código del pipeline (no se reutiliza una cobertura que no corresponde).
+            python3 - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from pipeline.fuentes import CORREDOR_BBOX, Http
+          from pipeline.run import corredor_lluvia
+          f = Path("site/data/corredor_lluvia.json")
+          pub = json.loads(f.read_text()) if f.exists() else {}
+          if pub.get("bbox") != CORREDOR_BBOX:
+              c = corredor_lluvia(Http(), datetime.now(timezone.utc))
+              f.write_text(json.dumps(c, ensure_ascii=False, separators=(",", ":")))
+              print("corredor_lluvia recalculado:", len(c["celdas"]), "celdas, corrida", c["corrida_inicio_utc"])
+          else:
+              print("corredor_lluvia publicado cubre el recuadro")
+          PY
             (cd site && nohup python3 -m http.server 8123 > /tmp/http.log 2>&1 &)
             if [ -d antes/site ]; then
               # la versión ANTES lee exactamente los mismos archivos de datos
