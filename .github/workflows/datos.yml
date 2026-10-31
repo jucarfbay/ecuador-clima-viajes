@@ -58,6 +58,12 @@ jobs:
               --notes "Pronósticos (miembros del ensamble por punto) y lluvia observada de estaciones, para calibrar (Plan 5)."
           gh release upload "$TAG" "${files[@]}" --clobber
 
+      - name: Versionar archivos estáticos (evita que el navegador use una versión vieja)
+        run: |
+          V="${GITHUB_SHA::7}"
+          sed -i "s|src=\"app.js\"|src=\"app.js?v=$V\"|; s|href=\"estilos.css\"|href=\"estilos.css?v=$V\"|" site/index.html
+          grep -q "app.js?v=$V" site/index.html
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
