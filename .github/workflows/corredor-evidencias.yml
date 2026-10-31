@@ -23,12 +23,16 @@ jobs:
           node-version: "22"
       - name: Playwright y Chromium
         run: |
-          mkdir -p /tmp/pw && cd /tmp/pw && npm init -y >/dev/null && npm i playwright@1.55.0 >/dev/null
-          npx playwright install --with-deps chromium
+          mkdir -p evidencias /tmp/pw
+          cd /tmp/pw
+          { npm init -y && npm install --no-audit --no-fund playwright@1.55.0 && npx playwright install --with-deps chromium; } \
+            > "$GITHUB_WORKSPACE/evidencias/instalacion.txt" 2>&1 || { tail -50 "$GITHUB_WORKSPACE/evidencias/instalacion.txt"; echo "FALLO_INSTALACION" >> "$GITHUB_WORKSPACE/evidencias/instalacion.txt"; }
+          tail -5 "$GITHUB_WORKSPACE/evidencias/instalacion.txt"
       - name: Capturar
         run: |
           cp tools/evidencias_corredor.mjs /tmp/pw/
-          node /tmp/pw/evidencias_corredor.mjs "${{ inputs.url }}" "$GITHUB_WORKSPACE/evidencias" || echo "La captura terminó con error; se publica lo que haya"
+          node /tmp/pw/evidencias_corredor.mjs "${{ inputs.url }}" "$GITHUB_WORKSPACE/evidencias" > evidencias/captura.txt 2>&1 || echo "La captura terminó con error; se publica lo que haya"
+          tail -30 evidencias/captura.txt
       - name: Video a MP4
         run: |
           shopt -s nullglob
