@@ -293,7 +293,8 @@ function marcador(html, lngLat, clase, anchor = "bottom") {
   const el = document.createElement("div");
   el.className = clase;
   el.innerHTML = html;
-  return new ML.Marker({ element: el, anchor }).setLngLat(lngLat).addTo(S.mapa);
+  // Detrás de una loma el marcador se atenúa, pero sigue legible (orientación espacial).
+  return new ML.Marker({ element: el, anchor, opacityWhenCovered: "0.72" }).setLngLat(lngLat).addTo(S.mapa);
 }
 
 function marcadores() {
@@ -347,7 +348,7 @@ function estaciones() {
     el.setAttribute("aria-label", `Estación ${e.nombre}: ${num(e.mm_24h)} mm en 24 horas hasta las ${hhmm(Date.parse(e.ultimo))}`);
     el.innerHTML = `<span class="placa"><b>${num(e.mm_24h)} mm</b> en 24 h<small>${esc(e.codigo)}, medido hasta ${hhmm(Date.parse(e.ultimo))}</small></span><span class="tallo"></span><span class="base"></span>`;
     const pop = new ML.Popup({ offset: [0, -64], maxWidth: "320px", closeButton: true }).setHTML(instrumento(e, d, vigente, atraso));
-    new ML.Marker({ element: el, anchor: "bottom" }).setLngLat([e.lon, e.lat]).setPopup(pop).addTo(S.mapa);
+    new ML.Marker({ element: el, anchor: "bottom", opacityWhenCovered: "0.8" }).setLngLat([e.lon, e.lat]).setPopup(pop).addTo(S.mapa);
   }
 }
 
