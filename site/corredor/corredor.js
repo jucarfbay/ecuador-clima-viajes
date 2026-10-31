@@ -227,6 +227,7 @@ async function iniciar() {
     if (MOVIL) document.querySelectorAll(".maplibregl-ctrl-attrib.maplibregl-compact-show").forEach((el) => el.classList.remove("maplibregl-compact-show"));
     if (MOV) dibujarEntrada(); else { mapa.jumpTo(VISTAS.general()); pintarRuta(1); }
     medirFps();
+    if (new URLSearchParams(location.search).has("medir")) medicion();
   });
   mapa.on("dragstart", detener);
   mapa.on("rotatestart", (e) => { if (e.originalEvent) detener(); });
@@ -244,7 +245,9 @@ function capas() {
     } });
   // Trazo de lluvia dentro de cada celda: más denso cuanto más intensa. Es la misma cifra del modelo, no más detalle.
   m.addLayer({ id: "lluvia-trazo", type: "fill", source: "lluvia", filter: [">=", ["get", "v"], 0.1],
-    paint: { "fill-pattern": ["step", ["get", "v"], "lluvia-t1", 1, "lluvia-t2", 2.5, "lluvia-t3", 5, "lluvia-t4"], "fill-opacity": 0.8 } });
+    paint: { "fill-pattern": ["step", ["get", "v"], "lluvia-t1", 1, "lluvia-t2", 2.5, "lluvia-t3", 5, "lluvia-t4"],
+      // la llovizna apenas se insinúa; el trazo se afirma con la intensidad
+      "fill-opacity": ["step", ["get", "v"], 0.3, 1, 0.6, 2.5, 0.8, 5, 0.9] } });
   // Bordes de celda muy tenues: la resolución real del modelo queda a la vista.
   m.addLayer({ id: "lluvia-celdas", type: "line", source: "lluvia", filter: [">=", ["get", "v"], 0.1],
     paint: { "line-color": "rgba(156,200,236,0.32)", "line-width": 0.8 } });
@@ -664,6 +667,28 @@ function pintarInfo() {
 }
 
 // ------------------------------------------------------------------ rendimiento
+
+/** ?medir=1: hace el recorrido completo y muestra los cuadros por segundo medidos en ESTE equipo. */
+function medicion() {
+  const t0 = performance.now();
+  setTimeout(() => {
+    const desde = S.fps.length;
+    if (!S.recorriendo) recorrer();
+    const fin = setInterval(() => {
+      if (S.recorriendo) return;
+      clearInterval(fin);
+      const v = S.fps.slice(desde).filter((x) => x > 0).sort((a, b) => a - b);
+      const q = (p) => v[Math.min(v.length - 1, Math.floor(p * (v.length - 1)))];
+      const el = document.createElement("div");
+      el.className = "info"; el.style.top = "auto"; el.style.bottom = "150px"; el.setAttribute("role", "status");
+      el.innerHTML = `<h2>Medición en este equipo</h2><p>Recorrido completo, ${v.length} s medidos.</p>
+        <p><b>Cuadros por segundo: mediana ${q(0.5)}, peor 5 % ${q(0.05)}, mínimo ${v[0]}.</b></p>
+        <p>Pantalla ${innerWidth}×${innerHeight}, densidad ${devicePixelRatio}. Escena lista a los ${(t0 / 1000).toFixed(1)} s de abrir la página.</p>`;
+      document.body.appendChild(el);
+      window.__medicion = { mediana: q(0.5), p5: q(0.05), min: v[0], n: v.length, listo_s: +(t0 / 1000).toFixed(1), ancho: innerWidth, alto: innerHeight, dpr: devicePixelRatio };
+    }, 500);
+  }, 6000);
+}
 
 function medirFps() {
   let n = 0, t0 = performance.now();
