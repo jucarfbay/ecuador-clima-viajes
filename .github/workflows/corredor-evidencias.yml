@@ -1,0 +1,51 @@
+name: "Corredor: evidencias"
+
+# Capturas (1920, 1440 y 390 px) y video del recorrido de /corredor/ publicado. Resultado en la rama
+# "evidencias" (no en main). WebGL por software: sirve para ver la escena, no para medir rendimiento.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Página a capturar"
+        default: "https://jucarfbay.github.io/ecuador-clima-viajes/corredor/"
+
+permissions:
+  contents: write
+
+jobs:
+  evidencias:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Playwright y Chromium
+        run: |
+          mkdir -p /tmp/pw && cd /tmp/pw && npm init -y >/dev/null && npm i playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium
+      - name: Capturar
+        run: |
+          cp tools/evidencias_corredor.mjs /tmp/pw/
+          node /tmp/pw/evidencias_corredor.mjs "${{ inputs.url }}" "$GITHUB_WORKSPACE/evidencias" || echo "La captura terminó con error; se publica lo que haya"
+      - name: Video a MP4
+        run: |
+          shopt -s nullglob
+          f=(evidencias/video-tmp/*.webm)
+          if [ ${#f[@]} -gt 0 ]; then
+            ffmpeg -y -loglevel error -i "${f[0]}" -vf "fps=30" -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p evidencias/corredor-recorrido-1280.mp4
+          fi
+          rm -rf evidencias/video-tmp
+          ls -la evidencias
+      - name: Publicar en la rama evidencias
+        run: |
+          mv evidencias /tmp/evidencias
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan evidencias-nueva
+          git rm -rfq . && git clean -fdxq
+          cp -r /tmp/evidencias/* .
+          echo "Evidencias de ${{ inputs.url }} generadas el $(date -u +%FT%TZ) desde ${GITHUB_SHA::7}" > LEEME.txt
+          git add -A && git commit -qm "Evidencias del corredor ${GITHUB_SHA::7}"
+          git push -f origin evidencias-nueva:evidencias

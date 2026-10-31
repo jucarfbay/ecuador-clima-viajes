@@ -166,26 +166,26 @@ function estilo() {
     layers: [
       { id: "fondo", type: "background", paint: { "background-color": "#0B1218" } },
       { id: "satelite", type: "raster", source: "satelite",
-        paint: { "raster-saturation": -0.22, "raster-contrast": 0.12, "raster-brightness-max": 0.86, "raster-brightness-min": 0.02 } },
+        paint: { "raster-saturation": -0.12, "raster-contrast": 0.18, "raster-brightness-max": 0.78, "raster-brightness-min": 0.0 } },
       { id: "sombras", type: "hillshade", source: "sombras",
         paint: {
           "hillshade-method": "combined",
-          "hillshade-illumination-direction": 295, "hillshade-illumination-altitude": 28, "hillshade-illumination-anchor": "map",
-          "hillshade-exaggeration": 0.42, "hillshade-shadow-color": "#06101a", "hillshade-highlight-color": "rgba(255,226,170,0.35)",
-          "hillshade-accent-color": "#0b1621",
+          "hillshade-illumination-direction": 285, "hillshade-illumination-altitude": 24, "hillshade-illumination-anchor": "map",
+          "hillshade-exaggeration": 0.62, "hillshade-shadow-color": "rgba(4,10,18,0.92)", "hillshade-highlight-color": "rgba(255,214,150,0.30)",
+          "hillshade-accent-color": "rgba(8,16,26,0.6)",
         } },
     ],
     terrain: { source: "dem", exaggeration: 1.0 },
     sky: {
-      "sky-color": "#14273a", "horizon-color": "#d8c6a2", "fog-color": "#4d6170",
-      "sky-horizon-blend": 0.55, "horizon-fog-blend": 0.7, "fog-ground-blend": 0.82,
-      "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 0.9, 12, 0.35],
+      "sky-color": "#0d1b28", "horizon-color": "#7d8c92", "fog-color": "#26343e",
+      "sky-horizon-blend": 0.7, "horizon-fog-blend": 0.55, "fog-ground-blend": 0.88,
+      "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 0.85, 12, 0.3],
     },
   };
 }
 
 const VISTAS = {
-  general: () => ({ center: [-78.545, -1.205], zoom: MOVIL ? 9.55 : 10.25, pitch: 66, bearing: 158 }),
+  general: () => ({ center: [-78.575, -1.185], zoom: MOVIL ? 9.75 : 10.55, pitch: 70, bearing: 152 }),
   cenital: () => ({ center: [-78.53, -1.17], zoom: MOVIL ? 9.2 : 9.85, pitch: 0, bearing: 0 }),
   intro: () => ({ center: [-78.62, -0.95], zoom: MOVIL ? 8.7 : 9.3, pitch: 50, bearing: 168 }),
 };
@@ -231,18 +231,18 @@ function capas() {
   m.addLayer({ id: "lluvia", type: "fill", source: "lluvia",
     paint: {
       "fill-color": ["step", ["get", "v"], "rgba(0,0,0,0)", ...ESCALA.flatMap(([u, c]) => [u, `rgb(${c.join(",")})`])],
-      "fill-opacity": ["case", ["<", ["get", "v"], 0.1], 0, 0.5], "fill-antialias": false,
+      "fill-opacity": ["interpolate", ["linear"], ["get", "v"], 0.09, 0, 0.1, 0.1, 1, 0.26, 5, 0.46, 10, 0.58], "fill-antialias": false,
     } });
   // Bordes de celda muy tenues: la resolución real del modelo queda a la vista.
-  m.addLayer({ id: "lluvia-celdas", type: "line", source: "lluvia",
-    paint: { "line-color": "rgba(236,239,234,0.10)", "line-width": 0.6 } });
+  m.addLayer({ id: "lluvia-celdas", type: "line", source: "lluvia", filter: [">=", ["get", "v"], 0.1],
+    paint: { "line-color": "rgba(156,200,236,0.22)", "line-width": 0.7 } });
 
   const linea = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: R.coords } };
   m.addSource("ruta", { type: "geojson", data: linea, lineMetrics: true });
   m.addLayer({ id: "ruta-sombra", type: "line", source: "ruta", layout: { "line-join": "round", "line-cap": "round" },
-    paint: { "line-color": "rgba(6,12,18,0.75)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 5, 13, 11], "line-blur": 2 } });
+    paint: { "line-color": "rgba(4,9,14,0.85)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 6, 13, 14], "line-blur": 1.5 } });
   m.addLayer({ id: "ruta", type: "line", source: "ruta", layout: { "line-join": "round", "line-cap": "round" },
-    paint: { "line-width": ["interpolate", ["linear"], ["zoom"], 8, 2.6, 13, 6.5], "line-gradient": "rgba(243,227,191,0)" } });
+    paint: { "line-width": ["interpolate", ["linear"], ["zoom"], 8, 3.2, 13, 8], "line-gradient": "rgba(243,227,191,0)" } });
 }
 
 /** Colorea la trayectoria con la lluvia a la hora de paso. `hasta` (0–1) revela el trazo; `vehiculo` atenúa lo recorrido. */
@@ -302,9 +302,20 @@ function marcadores() {
       [h.en_via.lon, h.en_via.lat], "hito");
   }
   S.vehiculo = marcador(`<span class="hora-v"></span><span class="p"></span>`, S.ruta.coords[0], "vehiculo");
+  // Marcas cada 10 minutos de viaje: la ruta se lee como trayectoria en el tiempo, no solo como línea.
+  S.marcas = [];
+  const fin = S.ruta.s[S.ruta.s.length - 1];
+  for (let seg = 600; seg < fin - 300; seg += 600) {
+    const km = kmEnSegundos(seg);
+    if (S.ruta.hitos.some((h) => Math.abs(h.km - km) < 2.5)) continue; // no tapar los hitos
+    S.marcas.push({ seg, m: marcador(`<span class="t"></span>`, puntoEnKm(km), "marca-t", "left") });
+  }
+  // Referencia geográfica (no dato): el volcán que domina el final del corredor.
+  marcador(`<span>Tungurahua</span>`, [-78.4422, -1.4675], "relieve-nombre");
 }
 
 function pintarHitos(salida) {
+  for (const { seg, m } of S.marcas || []) m.getElement().querySelector(".t").textContent = hhmm(salida + seg * 1000);
   for (const h of S.ruta.hitos) {
     const el = S.marcadores[h.id].getElement().querySelector(".paso");
     el.textContent = h.min === 0 ? `sales ${hhmm(salida)}` : `pasas ${hhmm(salida + h.min * 60e3)}`;

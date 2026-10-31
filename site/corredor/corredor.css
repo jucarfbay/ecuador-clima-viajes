@@ -80,7 +80,7 @@ button { font: inherit; color: inherit; }
 
 /* Etiquetas sobre el terreno (marcadores HTML anclados al relieve). */
 .hito { pointer-events: none; text-align: center; transform: translateY(-6px); }
-.hito .nombre { font-family: "Fraunces", Georgia, serif; font-size: 17px; color: #fff; text-shadow: 0 0 3px #000, 0 1px 10px rgba(0, 0, 0, .9); white-space: nowrap; }
+.hito .nombre { font-family: "Fraunces", Georgia, serif; font-size: 21px; color: #fff; text-shadow: 0 0 3px #000, 0 1px 10px rgba(0, 0, 0, .9); white-space: nowrap; }
 .hito .paso { display: block; font-size: 12px; font-weight: 600; color: var(--sol); text-shadow: 0 0 3px #000, 0 0 8px #000; }
 .hito .punto { display: block; width: 7px; height: 7px; margin: 3px auto 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgba(0, 0, 0, .6); }
 
@@ -147,3 +147,9 @@ button { font: inherit; color: inherit; }
   .maplibregl-ctrl-bottom-right { bottom: 96px; }
 }
 @media (prefers-reduced-motion: reduce) { .estado-carga { transition: none; } }
+
+.marca-t { pointer-events: none; display: flex; align-items: center; }
+.marca-t::before { content: ""; width: 10px; height: 2px; background: var(--sol); box-shadow: 0 0 4px #000; }
+.marca-t .t { margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--sol); text-shadow: 0 0 3px #000, 0 0 8px #000; }
+.relieve-nombre { pointer-events: none; font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 15px; color: rgba(236, 239, 234, .78); text-shadow: 0 0 6px #000; letter-spacing: .04em; }
+@media (max-width: 640px) { .hito .nombre { font-size: 17px; } .marca-t .t { display: none; } }
