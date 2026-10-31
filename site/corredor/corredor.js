@@ -465,10 +465,13 @@ function contraste(e) {
 function instrumento(e, d, vigente, atraso) {
   const fin = Date.parse(e.ultimo);
   const c = contraste(e);
+  // La cifra principal es la última lectura horaria tal como llegó, con su hora; nunca un valor "actual" inventado.
+  const serie = e.ultimas_24h || [];
+  const ultima = serie.length ? serie[serie.length - 1][1] : e.mm_1h;
   return `<div class="instrumento">
     <h3>${esc(e.nombre)}</h3>
-    <div class="cifra">${num(e.mm_1h)} mm</div>
-    <div>en la hora de ${hhmm(fin - H)} a ${hhmm(fin)}, ${diaTxt(fin)}${vigente ? "" : ` <b>(dato con ${num(atraso)} h de atraso)</b>`}</div>
+    <div class="cifra">${num(ultima)} mm</div>
+    <div>en la hora de ${hhmm(fin - H)} a ${hhmm(fin)}, ${diaTxt(fin)}; última lectura recibida${vigente ? "" : ` <b>(con ${num(atraso)} h de atraso)</b>`}</div>
     <dl>
       <dt>3 h / 24 h / 72 h</dt><dd>${num(e.mm_3h)} / ${num(e.mm_24h)} / ${num(e.mm_72h)} mm</dd>
       <dt>Código</dt><dd>${esc(e.codigo)} (${esc(e.propietario || "")})</dd>
