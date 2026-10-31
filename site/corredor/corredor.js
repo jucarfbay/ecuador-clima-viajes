@@ -177,7 +177,7 @@ function estilo() {
     ],
     terrain: { source: "dem", exaggeration: 1.0 },
     sky: {
-      "sky-color": "#0d1b28", "horizon-color": "#7d8c92", "fog-color": "#26343e",
+      "sky-color": "#0c1a27", "horizon-color": "#9a8f7c", "fog-color": "#26343e",
       "sky-horizon-blend": 0.7, "horizon-fog-blend": 0.55, "fog-ground-blend": 0.88,
       "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 0.85, 12, 0.3],
     },
@@ -231,39 +231,56 @@ function capas() {
   m.addLayer({ id: "lluvia", type: "fill", source: "lluvia",
     paint: {
       "fill-color": ["step", ["get", "v"], "rgba(0,0,0,0)", ...ESCALA.flatMap(([u, c]) => [u, `rgb(${c.join(",")})`])],
-      "fill-opacity": ["interpolate", ["linear"], ["get", "v"], 0.09, 0, 0.1, 0.1, 1, 0.26, 5, 0.46, 10, 0.58], "fill-antialias": false,
+      "fill-opacity": ["interpolate", ["linear"], ["get", "v"], 0.09, 0, 0.1, 0.06, 1, 0.24, 5, 0.44, 10, 0.56], "fill-antialias": false,
     } });
   // Bordes de celda muy tenues: la resolución real del modelo queda a la vista.
   m.addLayer({ id: "lluvia-celdas", type: "line", source: "lluvia", filter: [">=", ["get", "v"], 0.1],
     paint: { "line-color": "rgba(156,200,236,0.22)", "line-width": 0.7 } });
 
-  const linea = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: R.coords } };
-  m.addSource("ruta", { type: "geojson", data: linea, lineMetrics: true });
-  m.addLayer({ id: "ruta-sombra", type: "line", source: "ruta", layout: { "line-join": "round", "line-cap": "round" },
-    paint: { "line-color": "rgba(4,9,14,0.85)", "line-width": ["interpolate", ["linear"], ["zoom"], 8, 6, 13, 14], "line-blur": 1.5 } });
-  m.addLayer({ id: "ruta", type: "line", source: "ruta", layout: { "line-join": "round", "line-cap": "round" },
-    paint: { "line-width": ["interpolate", ["linear"], ["zoom"], 8, 3.2, 13, 8], "line-gradient": "rgba(243,227,191,0)" } });
+  // La trayectoria se divide en tramos de ~0,4 km. Cada tramo lleva la lluvia prevista a la hora en que pasarías:
+  // la "manga" azul (ancho y color) es el dato; la línea clara es la vía.
+  S.tramos = [];
+  let ini = 0;
+  for (let v = 1; v < R.coords.length; v++) {
+    if (R.km[v] - R.km[ini] >= 0.4 || v === R.coords.length - 1) { S.tramos.push([ini, v]); ini = v; }
+  }
+  m.addSource("tramos", { type: "geojson", data: geoTramos(null, 0, 1) });
+  const ancho = (base) => ["interpolate", ["linear"], ["zoom"], 8, ["*", base, 0.45], 13, base];
+  m.addLayer({ id: "ruta-manga", type: "line", source: "tramos", layout: { "line-join": "round", "line-cap": "round" },
+    filter: [">=", ["get", "mm"], 0.1],
+    paint: {
+      "line-color": ["step", ["get", "mm"], "rgba(0,0,0,0)", ...ESCALA.flatMap(([u, c]) => [u, `rgb(${c.join(",")})`])],
+      "line-width": ancho(["interpolate", ["linear"], ["get", "mm"], 0.1, 10, 1, 18, 5, 30, 10, 40]),
+      "line-opacity": ["*", ["get", "visible"], 0.62], "line-blur": 3,
+    } });
+  m.addLayer({ id: "ruta-sombra", type: "line", source: "tramos", layout: { "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": "rgba(4,9,14,0.9)", "line-width": ancho(9), "line-opacity": ["get", "visible"], "line-blur": 1 } });
+  m.addLayer({ id: "ruta", type: "line", source: "tramos", layout: { "line-join": "round", "line-cap": "round" },
+    paint: {
+      "line-color": ["case", ["get", "recorrido"], "rgba(243,227,191,0.5)", "rgb(243,227,191)"],
+      "line-width": ancho(4.2), "line-opacity": ["get", "visible"],
+    } });
 }
 
-/** Colorea la trayectoria con la lluvia a la hora de paso. `hasta` (0–1) revela el trazo; `vehiculo` atenúa lo recorrido. */
-function pintarRuta(hasta = 1, vehiculoKm = null) {
+/** Tramos con la lluvia a la hora de paso. `hasta` (0–1) revela el trazo; `vehiculoKm` marca lo ya recorrido. */
+function geoTramos(mm, hasta, vehiculoKm) {
   const R = S.ruta, total = R.km[R.km.length - 1];
-  const mm = lluviaEnRuta(S.salidas[S.k]);
-  const paradas = [];
-  let ultimo = -1;
-  for (let v = 0; v < R.coords.length; v++) {
-    const p = R.km[v] / total;
-    if (p - ultimo < 0.004 && v !== R.coords.length - 1) continue;
-    ultimo = p;
-    const recorrido = vehiculoKm != null && R.km[v] < vehiculoKm;
-    const alfa = p > hasta ? 0 : recorrido ? 0.45 : 1;
-    const c = colorLluvia(mm[v], alfa) || `rgba(${SECO.join(",")},${alfa})`;
-    paradas.push(p, c);
-  }
-  // line-progress exige paradas estrictamente crecientes
-  const limpias = [];
-  for (let i = 0; i < paradas.length; i += 2) if (!limpias.length || paradas[i] > limpias[limpias.length - 2]) limpias.push(paradas[i], paradas[i + 1]);
-  S.mapa.setPaintProperty("ruta", "line-gradient", ["interpolate", ["linear"], ["line-progress"], ...limpias]);
+  return {
+    type: "FeatureCollection",
+    features: S.tramos.map(([a, b]) => {
+      // lluvia del tramo: la mayor entre sus vértices (no se promedia hacia abajo un chubasco)
+      let v = null;
+      if (mm) for (let i = a; i <= b; i++) if (mm[i] != null) v = Math.max(v ?? 0, mm[i]);
+      return {
+        type: "Feature",
+        properties: { mm: v ?? 0, visible: R.km[a] / total <= hasta ? 1 : 0, recorrido: vehiculoKm != null && R.km[b] <= vehiculoKm },
+        geometry: { type: "LineString", coordinates: R.coords.slice(a, b + 1) },
+      };
+    }),
+  };
+}
+function pintarRuta(hasta = 1, vehiculoKm = null) {
+  S.mapa.getSource("tramos").setData(geoTramos(lluviaEnRuta(S.salidas[S.k]), hasta, vehiculoKm));
 }
 
 function pintarCampo(i) {
@@ -281,8 +298,10 @@ function pintarValidez() {
   const corrida = L.corrida_inicio_utc ? `${fechaTxt(Date.parse(L.corrida_inicio_utc))}, ${hhmm(Date.parse(L.corrida_inicio_utc))}` : "sin dato de corrida";
   const km = Math.round((L.paso_lat || 0.07) * 111);
   $("#validez").innerHTML = i < 0 ? "Sin pronóstico para esta hora." : `
-    <strong>Lluvia prevista de ${hhmm(ini)} a ${hhmm(fin)}, ${diaTxt(ini)}</strong><br>
-    ECMWF IFS HRES, determinista. Celdas nativas de ~${km} km sin interpolar. Corrida del ${corrida}.
+    <strong>Lluvia prevista de ${hhmm(ini)} a ${hhmm(fin)}, ${diaTxt(ini)}</strong>
+    <span class="detalle"><br>ECMWF IFS HRES, determinista. Celdas nativas de ~${km} km sin interpolar. Corrida del ${corrida}.
+    En la ruta, el ancho y color de la franja muestran la lluvia a la hora en que pasarías.</span>
+    <span class="movil">ECMWF HRES, celdas de ~${km} km, corrida ${corrida}.</span>
     <div class="escala">${ESCALA.map(([, c]) => `<span style="background:rgb(${c.join(",")})"></span>`).join("")}</div>
     <div class="valores"><span>0,1</span><span>1</span><span>5</span><span>10+ mm/h</span></div>`;
 }
@@ -308,7 +327,7 @@ function marcadores() {
   const fin = S.ruta.s[S.ruta.s.length - 1];
   for (let seg = 600; seg < fin - 300; seg += 600) {
     const km = kmEnSegundos(seg);
-    if (S.ruta.hitos.some((h) => Math.abs(h.km - km) < 2.5)) continue; // no tapar los hitos
+    if (S.ruta.hitos.some((h) => Math.abs(h.km - km) < 4)) continue; // no tapar los hitos
     S.marcas.push({ seg, m: marcador(`<span class="t"></span>`, puntoEnKm(km), "marca-t", "left") });
   }
   // Referencia geográfica (no dato): el volcán que domina el final del corredor.
@@ -430,6 +449,7 @@ function elegirSalida(k, { mover = true } = {}) {
   const banda = $("#viaje-banda");
   banda.style.left = `${(S.k / n) * 100}%`;
   banda.style.width = `${Math.max(0.6, (dur / H / n) * 100)}%`;
+  banda.dataset.hora = hhmm(salida);
   pintarHitos(salida);
   S.progreso = 0;
   moverVehiculo(0);
@@ -487,33 +507,44 @@ function recorrer() {
     saltar();
     return;
   }
-  let inicio = null, km0 = S.progreso >= total - 0.05 ? 0 : S.progreso;
-  let rumboSuave = m.getBearing(), centro = puntoEnKm(km0), zoomSuave = m.getZoom(), ultimoPintado = -1;
+  const km0 = S.progreso >= total - 0.05 ? 0 : S.progreso;
+  // Cámara de seguimiento: detrás del vehículo, mirando 2 km adelante. Todo el suavizado depende del TIEMPO
+  // transcurrido (no de los cuadros), así la cámara se comporta igual en un teléfono lento.
+  const camara = (km) => {
+    const dh = Math.min(...R.hitos.map((h) => Math.abs(h.km - km)));
+    return {
+      rumbo: rumbo(puntoEnKm(Math.max(0, km - 0.8)), puntoEnKm(Math.min(total, km + 2.4))),
+      // se eleva al acercarse a cada hito para mostrar el contexto, y baja entre hitos
+      zoom: (MOVIL ? 11.75 : 12.4) - 0.8 * Math.exp(-(dh ** 2) / (2 * 2.4 ** 2)),
+      centro: puntoEnKm(Math.min(total, km + 1.0)),
+    };
+  };
+  const c0 = camara(km0);
+  moverVehiculo(km0);
+  m.easeTo({ center: c0.centro, bearing: c0.rumbo, pitch: 64, zoom: c0.zoom, duration: 2600, essential: true });
+  let rumboSuave = c0.rumbo, zoomSuave = c0.zoom, centro = c0.centro, inicio = null, previo = null, ultimoPintado = -1;
   const paso = (ahoraMs) => {
     if (!S.recorriendo) return;
-    if (inicio == null) inicio = ahoraMs - (km0 / total) * duracionMs;
+    if (inicio == null) { inicio = ahoraMs - (segundosEnKm(km0) / R.s[R.s.length - 1]) * duracionMs; previo = ahoraMs; }
+    const dt = Math.min(250, ahoraMs - previo); previo = ahoraMs;
+    const suave = (tau) => 1 - Math.exp(-dt / tau);
     const q = Math.min(1, (ahoraMs - inicio) / duracionMs);
     // avance en TIEMPO de viaje: el vehículo va más lento donde la vía es lenta
     const km = kmEnSegundos(q * R.s[R.s.length - 1]);
     S.progreso = km;
     const t = moverVehiculo(km);
-    // rumbo: dirección media de los próximos 2 km, suavizada
-    const objetivo = rumbo(puntoEnKm(Math.max(0, km - 0.6)), puntoEnKm(Math.min(total, km + 2.2)));
-    rumboSuave = (rumboSuave + angDif(rumboSuave, objetivo) * 0.035 + 360) % 360;
-    // altitud: la cámara se eleva al acercarse a cada hito para dar contexto
-    const dh = Math.min(...R.hitos.map((h) => Math.abs(h.km - km)));
-    const zObj = (MOVIL ? 11.7 : 12.35) - 0.75 * Math.exp(-(dh ** 2) / (2 * 2.2 ** 2));
-    zoomSuave += (zObj - zoomSuave) * 0.04;
-    const delante = puntoEnKm(Math.min(total, km + 0.9));
-    centro = [centro[0] + (delante[0] - centro[0]) * 0.08, centro[1] + (delante[1] - centro[1]) * 0.08];
-    m.jumpTo({ center: centro, bearing: rumboSuave, pitch: 66, zoom: zoomSuave });
+    const c = camara(km);
+    rumboSuave = (rumboSuave + angDif(rumboSuave, c.rumbo) * suave(900) + 360) % 360;
+    zoomSuave += (c.zoom - zoomSuave) * suave(1200);
+    centro = [centro[0] + (c.centro[0] - centro[0]) * suave(350), centro[1] + (c.centro[1] - centro[1]) * suave(350)];
+    m.jumpTo({ center: centro, bearing: rumboSuave, pitch: 64, zoom: zoomSuave });
     pintarCampo(horaDe(t));
-    if (Math.abs(km - ultimoPintado) > 0.35) { pintarRuta(1, km); ultimoPintado = km; }
+    if (Math.abs(km - ultimoPintado) > 0.4) { pintarRuta(1, km); ultimoPintado = km; }
     pintarLectura(t);
     if (q < 1) S.anim = requestAnimationFrame(paso);
     else { detener(); m.easeTo({ ...VISTAS.general(), duration: 3500 }); }
   };
-  S.anim = requestAnimationFrame(paso);
+  S.anim = setTimeout(() => { if (S.recorriendo) S.anim = requestAnimationFrame(paso); }, 2600);
 }
 
 function detener() {

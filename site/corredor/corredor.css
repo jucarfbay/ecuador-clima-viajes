@@ -65,13 +65,14 @@ button { font: inherit; color: inherit; }
 .lectura { margin: 0; font-size: .95rem; }
 .lectura b { font-weight: 800; font-size: 1.05rem; }
 .lectura .tenue { color: var(--tinta-2); }
-.pista { position: relative; height: 58px; }
+.pista { position: relative; height: 60px; }
 .exposicion { position: absolute; left: 0; right: 0; top: 0; height: 30px; display: flex; align-items: flex-start; gap: 1px; }
 .exposicion i { flex: 1; display: block; background: var(--lluvia-2); opacity: .85; border-radius: 0 0 2px 2px; min-height: 1px; }
 .exposicion i.sin { background: rgba(236, 239, 234, .12); }
 .exposicion i.pasado { opacity: .25; }
-.viaje-banda { position: absolute; top: 0; height: 30px; border: 1.5px solid var(--sol); border-top-width: 3px; border-radius: 0 0 3px 3px; pointer-events: none; }
-.marcas { position: absolute; left: 0; right: 0; top: 32px; height: 14px; font-size: .68rem; color: var(--tinta-2); }
+.viaje-banda { position: absolute; top: -3px; height: 36px; border: 2px solid var(--sol); border-top-width: 4px; border-radius: 0 0 3px 3px; background: rgba(243, 227, 191, .14); pointer-events: none; min-width: 10px; }
+.viaje-banda::after { content: attr(data-hora); position: absolute; left: 50%; bottom: -17px; transform: translateX(-50%); font-size: .7rem; font-weight: 800; color: var(--obsidiana); background: var(--sol); padding: 1px 5px 0; border-radius: 2px; white-space: nowrap; }
+.marcas { position: absolute; left: 0; right: 0; top: 40px; height: 14px; font-size: .68rem; color: var(--tinta-2); }
 .marcas span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .marcas span.dia { color: var(--tinta); font-weight: 600; transform: none; border-left: 1px solid rgba(236, 239, 234, .4); padding-left: 4px; }
 .marcas span.ahora { color: var(--ambar); }
@@ -134,17 +135,19 @@ button { font: inherit; color: inherit; }
 @media (max-width: 640px) {
   body { font-size: 14px; }
   .titulo { left: 16px; top: max(12px, env(safe-area-inset-top)); }
+  .ruta-nombre { font-size: 1.7rem; }
   .titulo-sub { font-size: .78rem; margin-top: 4px; }
-  .mandos { top: auto; bottom: 128px; right: 12px; flex-direction: column; align-items: flex-end; }
+  .mandos { top: calc(max(12px, env(safe-area-inset-top)) + 64px); left: 16px; right: auto; }
   .mando { min-height: 36px; padding: 7px 10px 5px; font-size: .8rem; }
-  .validez { left: 16px; bottom: 128px; max-width: calc(100vw - 140px); }
-  .validez .escala, .validez .valores { width: 160px; }
+  .validez { left: 16px; right: 16px; bottom: 150px; max-width: none; font-size: .72rem; }
+  .validez .detalle { display: none; }
+  .validez .escala, .validez .valores { width: 150px; }
   .tiempo { padding: 8px 14px max(10px, env(safe-area-inset-bottom)); }
   .lectura { font-size: .85rem; }
   .hito .nombre { font-size: 15px; }
   .estacion .tallo { height: 30px; }
   .info { top: 64px; right: 12px; max-height: calc(100vh - 220px); }
-  .maplibregl-ctrl-bottom-right { bottom: 96px; }
+  .maplibregl-ctrl-bottom-right { bottom: auto; top: 108px; }
 }
 @media (prefers-reduced-motion: reduce) { .estado-carga { transition: none; } }
 
@@ -153,3 +156,5 @@ button { font: inherit; color: inherit; }
 .marca-t .t { margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--sol); text-shadow: 0 0 3px #000, 0 0 8px #000; }
 .relieve-nombre { pointer-events: none; font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 15px; color: rgba(236, 239, 234, .78); text-shadow: 0 0 6px #000; letter-spacing: .04em; }
 @media (max-width: 640px) { .hito .nombre { font-size: 17px; } .marca-t .t { display: none; } }
+.validez .movil { display: none; }
+@media (max-width: 640px) { .validez .movil { display: inline; } .validez .movil::before { content: " "; } }
