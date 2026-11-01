@@ -266,7 +266,8 @@ window.__vistaGeneral = () => VISTAS.general();
 // ------------------------------------------------------------------ regreso: ruta desde tu ubicación
 
 const OSRM = "https://router.project-osrm.org/route/v1/driving/";
-// Localidades que se marcan si la ruta pasa a menos de 3 km (coordenadas de config/puntos.json del sistema).
+// Localidades que se marcan si la ruta pasa a menos de 6 km de su centro (los pasos laterales rodean las ciudades);
+// coordenadas de config/puntos.json del sistema. La distancia real queda en desplazamiento_m.
 const REFERENCIAS = [
   { id: "banos", nombre: "Baños", lat: -1.3964, lon: -78.4247 },
   { id: "pelileo", nombre: "Pelileo", lat: -1.33, lon: -78.543 },
@@ -338,8 +339,8 @@ async function rutaDesde(pos, destino) {
   for (const ref of REFERENCIAS) {
     let mejor = 0, dmin = Infinity;
     coords.forEach((c, i) => { const dd = distKm(c, [ref.lon, ref.lat]); if (dd < dmin) { dmin = dd; mejor = i; } });
-    // a menos de 3 km de la vía y no encima de la salida o la llegada
-    if (dmin <= 3 && km[mejor] > 3 && km[mejor] < total - 3) {
+    // a menos de 6 km de la vía y no encima de la salida o la llegada
+    if (dmin <= 6 && km[mejor] > 3 && km[mejor] < total - 3) {
       hitos.push({ ...ref, tipo: "paso", en_via: { lon: coords[mejor][0], lat: coords[mejor][1], desplazamiento_m: Math.round(dmin * 1000) },
         vertice: mejor, km: +km[mejor].toFixed(3), min: +(sc[mejor] / 60).toFixed(2) });
     }
@@ -629,7 +630,8 @@ function acomodar() {
     e.el.classList.remove("plegada", "sin-paso", ...e.variantes);
     if (e.el.hidden || getComputedStyle(etq).display === "none") continue;
     const punto = e.el.getBoundingClientRect();
-    if (punto.right < 0 || punto.left > ancho || punto.bottom < 0 || punto.top > alto) continue;
+    // punto fuera de pantalla: su etiqueta tampoco se muestra (no quedan restos cortados en el borde)
+    if (punto.right < 0 || punto.left > ancho || punto.bottom < 0 || punto.top > alto) { if (e.plegable) e.el.classList.add("plegada"); continue; }
     let ok = false;
     for (const v of e.variantes) {
       e.el.classList.add(v);
@@ -1039,7 +1041,9 @@ function pintarTitulo() {
   const n = document.querySelectorAll(".ruta-nombre > span:not(.flecha)");
   if (n.length === 2) { n[0].textContent = a; n[1].textContent = b; }
   const desde = R.origen?.tipo === "ubicacion" && R.origen.cerca ? ` desde cerca de ${R.origen.cerca}` : "";
-  $("#titulo-sub").textContent = `${Math.round(R.distancia_km)} km${desde}, unas ${horasMin(R.duracion_min)} sin tráfico ni paradas`;
+  $("#titulo-sub").textContent = MOVIL // en teléfono, una sola línea
+    ? `${Math.round(R.distancia_km)} km, ${horasMin(R.duracion_min)} sin tráfico ni paradas`
+    : `${Math.round(R.distancia_km)} km${desde}, unas ${horasMin(R.duracion_min)} sin tráfico ni paradas`;
   $("#escena").setAttribute("aria-label", `Escena 3D del corredor ${a}–${b} sobre relieve real`);
   $("#hora").setAttribute("aria-label", `Hora de salida (cada columna es una salida; las filas son los tramos de ${a} a ${b})`);
 }
@@ -1053,7 +1057,7 @@ function pintarInfo() {
     <h3>Relieve</h3><p>Terrain Tiles de Mapzen en AWS (base SRTM de ~30 m en Ecuador), sin exagerar la altura. Suaviza quebradas estrechas.</p>
     <h3>Ruta</h3><p>${esc(R.fuente)}, consultada el ${esc(R.consultado.slice(0, 10))}. ${R.origen?.tipo === "ubicacion"
       ? `Salida: ${R.origen.manual ? "el punto indicado en la dirección de la página" : `tu ubicación según el navegador${R.origen.precision_m ? ` (precisión de unos ${num(Math.round(R.origen.precision_m))} m)` : ""}`}. Tu ubicación no se guarda: se envía redondeada a unos 100 m solo al servidor de rutas de OSRM para trazar el camino.`
-      : `Salida: Baños (${esc(MOTIVOS[S.motivo] || "sin ubicación")}). Ruta versionada en el sitio.`} Llegada: San Rafael, lugar poblado de OpenStreetMap.${R.hitos.filter((h) => h.tipo === "paso").map((h) => ` ${esc(h.nombre)} se ubica en la vía, sin desviar la ruta hacia su centro.`).join("")} ${num(R.distancia_km)} km y ${num(R.duracion_min)} min sin tráfico ni paradas: duración total de OSRM; los tiempos por tramo son sus anotaciones escaladas a esa cifra. ${esc(R.licencia)}.</p>
+      : `Salida: Baños (${esc(MOTIVOS[S.motivo] || "sin ubicación")}). Ruta versionada en el sitio.`} Llegada: San Rafael, lugar poblado de OpenStreetMap.${R.hitos.filter((h) => h.tipo === "paso").map((h) => ` ${esc(h.nombre)} se marca donde la vía pasa más cerca de su centro (a ${num(h.en_via.desplazamiento_m / 1000)} km), sin desviar la ruta.`).join("")} ${num(R.distancia_km)} km y ${num(R.duracion_min)} min sin tráfico ni paradas: duración total de OSRM; los tiempos por tramo son sus anotaciones escaladas a esa cifra. ${esc(R.licencia)}.</p>
     <h3>Lluvia prevista</h3><p>${esc(L.modelo)}, producto ${esc(L.producto)}, ${esc(L.rejilla)}. ${esc(L.seleccion)}. Corrida iniciada ${esc(L.corrida_inicio_utc || "sin dato")} (UTC). Determinista: un solo escenario. La confianza del punto más lluvioso sale del ensamble ECMWF de 51 escenarios en la localidad más cercana de la ruta.</p>
     <h3>Lluvia medida</h3><ul>${ests || "<li>Ninguna estación a menos de 7 km de la vía.</li>"}</ul><p>Visor del INAMHI, sin control de calidad publicado. Mover la hora de salida no cambia las mediciones.</p>
     <h3>Ambientación</h3><p>Cielo, bruma y color de luz son de representación, no datos. La dirección de la luz y la penumbra siguen la posición aproximada del sol a la hora de validez (astronomía); no indican nubosidad. No hay nubes porque el sistema no tiene datos de nubosidad del corredor.</p>
