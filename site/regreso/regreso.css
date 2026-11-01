@@ -1,0 +1,216 @@
+/* El corredor vivo — Iteración 2. El paisaje es la interfaz; la banda inferior es el instrumento de decisión. */
+
+@font-face { font-family: "Fraunces"; font-weight: 400; font-display: swap; src: url(fuentes/fraunces-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Fraunces"; font-weight: 600; font-display: swap; src: url(fuentes/fraunces-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Overpass"; font-weight: 400; font-display: swap; src: url(../fuentes/overpass-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Overpass"; font-weight: 600; font-display: swap; src: url(../fuentes/overpass-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Overpass"; font-weight: 800; font-display: swap; src: url(../fuentes/overpass-latin-800-normal.woff2) format("woff2"); }
+
+:root {
+  --obsidiana: #0B1218;      /* sombras del terreno, fondo */
+  --tinta: #ECEFEA;          /* texto sobre la escena */
+  --tinta-2: #A9B6B4;        /* texto secundario (7,9:1 sobre obsidiana) */
+  --ambar: #F2B45A;          /* medido: estaciones */
+  --sol: #F3E3BF;            /* la vía y la salida elegida */
+  --lluvia-1: #9CC8EC; --lluvia-2: #4B8FD6; --lluvia-3: #2F5FB8; --lluvia-4: #6B3FB3; /* pronóstico */
+  --alto-matriz: 78px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--obsidiana); color: var(--tinta); overflow: hidden; }
+body { font-family: "Overpass", system-ui, sans-serif; font-size: 15px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+#escena { position: fixed; inset: 0; z-index: 0; } /* contexto propio: nada del mapa se dibuja sobre la interfaz */
+/* Viñeta: concentra la mirada en el valle y da asiento al título y a la banda. Solo luz, no dato. */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 44%, transparent 55%, rgba(4, 9, 14, .5) 100%),
+              linear-gradient(to bottom, rgba(4, 9, 14, .5), transparent 16%);
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--sol); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+/* Título editorial: el destino, sobre el cielo. */
+.titulo { position: fixed; top: max(18px, env(safe-area-inset-top)); left: 24px; z-index: 5; pointer-events: none; text-shadow: 0 1px 12px rgba(0, 0, 0, .55); }
+.ruta-nombre { margin: 0; font-family: "Fraunces", Georgia, serif; font-weight: 400; font-size: clamp(1.9rem, 3.2vw, 3rem); line-height: 1; letter-spacing: -.01em; display: flex; gap: .35em; align-items: baseline; }
+.ruta-nombre .flecha { font-family: "Overpass", sans-serif; font-size: .55em; color: var(--sol); transform: translateY(-.15em); }
+.titulo-sub { margin: 8px 0 0; color: var(--tinta-2); font-size: .9rem; }
+
+/* Mandos de cámara: discretos, arriba a la derecha. */
+.mandos { position: fixed; top: max(18px, env(safe-area-inset-top)); right: 18px; z-index: 5; display: flex; gap: 6px; }
+.mando {
+  min-height: 40px; padding: 8px 12px 6px; border-radius: 6px; border: 1px solid rgba(236, 239, 234, .28);
+  background: rgba(11, 18, 24, .55); cursor: pointer; font-weight: 600; font-size: .86rem;
+}
+.mando:hover { border-color: rgba(236, 239, 234, .6); }
+.mando.principal { display: inline-flex; align-items: center; gap: 6px; background: var(--sol); color: var(--obsidiana); border-color: var(--sol); }
+.mando.principal svg { width: 14px; height: 14px; fill: currentColor; margin-top: -2px; }
+.mando .i-pausa, .mando[aria-pressed="true"] .i-play { display: none; }
+.mando[aria-pressed="true"] .i-pausa { display: inline; }
+
+.aviso a { color: var(--sol); }
+.aviso {
+  max-width: 640px; margin: 0 0 10px; padding: 6px 10px 4px; font-size: .8rem; color: var(--tinta);
+  border-left: 3px solid var(--ambar); background: rgba(11, 18, 24, .7); border-radius: 2px;
+}
+
+/* ------------------------------------------------------------ banda de decisión */
+.tiempo {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; padding: 22px 24px max(10px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(8, 13, 18, .96) 70%, rgba(8, 13, 18, 0));
+}
+.decision { display: grid; gap: 2px; margin-bottom: 12px; }
+.decision p { margin: 0; }
+.decision .viaje { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.decision .viaje .t { font-size: .85rem; color: var(--tinta-2); }
+.decision .viaje b { font-size: 1.55rem; font-weight: 800; color: var(--tinta); letter-spacing: -.01em; margin-right: 4px; }
+.decision .flecha { color: var(--sol); font-size: 1.1rem; }
+.decision .dia { font-size: .85rem; color: var(--tinta-2); margin-left: 4px; }
+.decision .peor { font-size: 1rem; }
+.decision .peor b { color: var(--lluvia-1); font-weight: 800; }
+.decision .seco { color: var(--sol); font-weight: 600; }
+.decision .conf { margin-left: 10px; font-size: .8rem; color: var(--tinta-2); border-bottom: 1px dotted rgba(169, 182, 180, .6); }
+.decision .otra { font-size: .86rem; color: var(--tinta-2); }
+.decision .otra b { color: var(--sol); font-weight: 800; }
+.decision .comp.es { color: var(--sol); }
+.tenue { color: var(--tinta-2); }
+
+.matriz-marco { display: grid; grid-template-columns: 76px 1fr; gap: 8px; }
+.ejes { position: relative; height: var(--alto-matriz); font-size: .7rem; color: var(--tinta-2); }
+.ejes span { position: absolute; right: 0; transform: translateY(-50%); white-space: nowrap; }
+.ejes span::after { content: ""; display: inline-block; width: 6px; height: 1px; background: rgba(236, 239, 234, .5); margin-left: 4px; vertical-align: middle; }
+.pista { position: relative; height: calc(var(--alto-matriz) + 18px); }
+#matriz { position: absolute; left: 0; top: 0; width: 100%; height: var(--alto-matriz); image-rendering: pixelated; background: rgba(236, 239, 234, .03); border-radius: 2px; }
+.viaje-banda {
+  position: absolute; top: -3px; height: calc(var(--alto-matriz) + 6px); min-width: 6px; border: 2px solid var(--sol); border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); pointer-events: none;
+}
+.viaje-banda::after {
+  content: attr(data-hora); position: absolute; left: 50%; bottom: calc(100% + 2px); transform: translateX(-50%);
+  font-size: .72rem; font-weight: 800; color: var(--obsidiana); background: var(--sol); padding: 1px 5px 0; border-radius: 2px; white-space: nowrap;
+}
+/* el tramo más lluvioso de la salida elegida, dentro de su columna (en la escala de --alto-matriz) */
+.banda-pico { position: absolute; left: -5px; right: -5px; height: 3px; margin-top: 1px; background: var(--lluvia-1); box-shadow: 0 0 0 1px #000; transform: translateY(calc(-50% + 0px)); max-height: 3px; }
+.mejor { position: absolute; top: calc(var(--alto-matriz) + 2px); width: 0; height: 0; transform: translateX(-50%); border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid #9fe0c0; }
+.marcas { position: absolute; left: 0; right: 0; top: calc(var(--alto-matriz) + 4px); height: 14px; font-size: .68rem; color: var(--tinta-2); }
+.marcas span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.marcas span.dia { color: var(--tinta); font-weight: 600; transform: none; border-left: 1px solid rgba(236, 239, 234, .4); padding-left: 4px; }
+.marcas span.ahora { color: var(--ambar); }
+#hora { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: calc(var(--alto-matriz) + 2px); margin: 0; opacity: 0; cursor: ew-resize; }
+.pista:focus-within .viaje-banda { box-shadow: 0 0 0 3px rgba(243, 227, 191, .45); }
+
+.pie { margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; font-size: .74rem; color: var(--tinta-2); }
+.pie b { color: var(--tinta); font-weight: 600; }
+.pie .leyenda { display: inline-flex; height: 8px; width: 120px; border-radius: 2px; overflow: hidden; }
+.pie .leyenda i { flex: 1; }
+.pie .leyenda-t { margin-left: -8px; }
+.pie .vial { font-style: italic; }
+
+/* ------------------------------------------------------------ marcas sobre el terreno */
+/* Cada marca es un punto en su posición exacta; la etiqueta se coloca arriba, a la derecha o a la izquierda
+   (o se pliega) según no choque con otras de mayor prioridad. */
+/* OJO: no fijar `position` aquí; .maplibregl-marker es absoluto y es lo que ancla la marca a su coordenada. */
+.marca { width: 10px; height: 10px; padding: 0; border: 0; background: none; }
+.marca .punto { position: absolute; inset: 0; border-radius: 50%; }
+.marca .etq { position: absolute; white-space: nowrap; pointer-events: none; text-shadow: 0 0 3px #000, 0 1px 10px rgba(0, 0, 0, .9); }
+.marca:not(.der):not(.izq) .etq { left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); text-align: center; }
+.marca.der .etq { left: calc(100% + 8px); top: 50%; transform: translateY(-50%); text-align: left; }
+.marca.izq .etq { right: calc(100% + 8px); top: 50%; transform: translateY(-50%); text-align: right; }
+.marca.plegada .etq { display: none; }
+.hito.sin-paso .paso { display: none; }
+
+.hito { pointer-events: none; }
+.hito .punto { background: #fff; box-shadow: 0 0 0 2px rgba(0, 0, 0, .65); }
+.hito .nombre { display: block; font-family: "Fraunces", Georgia, serif; font-size: 19px; line-height: 1.05; color: #fff; }
+.hito.extremo .nombre { font-size: 23px; }
+.hito .paso { display: block; font-size: 12px; font-weight: 800; color: var(--sol); margin-top: 2px; }
+
+.vehiculo { pointer-events: none; width: 14px; height: 14px; }
+.vehiculo .punto { background: #fff; box-shadow: 0 0 0 3px var(--obsidiana), 0 0 18px 6px rgba(243, 227, 191, .55); }
+.vehiculo .hora-v { font-weight: 800; font-size: 13px; color: var(--obsidiana); background: var(--sol); padding: 2px 6px 0; border-radius: 3px; text-shadow: none; }
+.vehiculo.en-origen .etq { display: none; }
+
+.pico { pointer-events: none; width: 8px; height: 8px; }
+.pico .punto { background: var(--lluvia-1); box-shadow: 0 0 0 2px var(--obsidiana); }
+.pico .pico-v { display: inline-block; font-size: 12px; color: var(--tinta); background: rgba(11, 18, 24, .88); border-left: 3px solid var(--lluvia-2); padding: 2px 6px 0; text-shadow: none; }
+.pico .pico-v b { color: var(--lluvia-1); font-weight: 800; }
+
+.estacion { cursor: pointer; width: 11px; height: 11px; }
+.estacion .punto { background: var(--ambar); box-shadow: 0 0 0 3px rgba(242, 180, 90, .28), 0 0 0 1px #000; }
+.estacion .etq { font-size: 12px; color: var(--tinta); background: rgba(11, 18, 24, .85); border: 1px solid var(--ambar); border-radius: 3px; padding: 2px 6px 0; text-shadow: none; }
+.estacion .etq b { color: var(--ambar); font-weight: 800; }
+.estacion:hover .etq, .estacion:focus-visible .etq { background: var(--obsidiana); }
+.estacion:focus-visible { outline-offset: 6px; border-radius: 50%; }
+.estacion.atrasada .punto { background: var(--tinta-2); }
+.estacion.atrasada .etq { border-style: dashed; border-color: var(--tinta-2); }
+
+.relieve { pointer-events: none; width: 0; height: 0; }
+.relieve .etq { font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 13px; color: rgba(236, 239, 234, .78); }
+.relieve .etq small { display: block; font-family: "Overpass", sans-serif; font-style: normal; font-size: 10px; }
+
+/* ------------------------------------------------------------ instrumento de estación y fuentes */
+.maplibregl-popup { z-index: 7; }
+.maplibregl-popup-content { max-height: calc(100vh - 330px); overflow: auto; background: rgba(11, 18, 24, .96); color: var(--tinta); border: 1px solid var(--ambar); border-radius: 4px; padding: 12px 14px 10px; font-family: "Overpass", sans-serif; font-size: .84rem; box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
+.maplibregl-popup-tip { border-top-color: var(--ambar) !important; border-bottom-color: var(--ambar) !important; }
+.maplibregl-popup-close-button { color: var(--tinta-2); font-size: 20px; width: 36px; height: 36px; }
+.instrumento h3 { margin: 0; font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1.05rem; padding-right: 24px; }
+.instrumento .tipo { margin: 0 0 4px; font-size: .74rem; color: var(--ambar); }
+.instrumento .cifra { font-size: 1.6rem; font-weight: 800; color: var(--ambar); line-height: 1.1; }
+.instrumento dl { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; margin: 8px 0 0; font-size: .78rem; }
+.instrumento dt { color: var(--tinta-2); }
+.instrumento dd { margin: 0; }
+.instrumento .contraste { margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(236, 239, 234, .15); font-size: .8rem; }
+.instrumento .nota { display: block; margin-top: 4px; color: var(--tinta-2); font-size: .74rem; }
+
+.info {
+  position: fixed; top: 70px; right: 18px; z-index: 8; width: min(440px, calc(100vw - 36px)); max-height: calc(100vh - 300px); overflow: auto;
+  background: rgba(11, 18, 24, .97); border: 1px solid rgba(236, 239, 234, .2); border-radius: 6px; padding: 16px 18px; font-size: .84rem;
+}
+.info h2 { margin: 0 0 8px; font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1.2rem; }
+.info h3 { margin: 12px 0 2px; font-size: .86rem; color: var(--sol); }
+.info p, .info li { color: var(--tinta-2); margin: 2px 0; }
+.info ul { padding-left: 18px; margin: 4px 0; }
+.info a { color: var(--lluvia-1); }
+.info .cerrar { position: absolute; top: 6px; right: 6px; width: 40px; height: 40px; background: none; border: 0; font-size: 1.3rem; color: var(--tinta-2); cursor: pointer; }
+
+.hoja {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; max-height: 62vh; overflow: auto;
+  background: rgba(11, 18, 24, .98); border-top: 2px solid var(--ambar); border-radius: 12px 12px 0 0;
+  padding: 14px 16px max(14px, env(safe-area-inset-bottom));
+}
+.hoja .cerrar { position: absolute; top: 6px; right: 6px; width: 44px; height: 44px; background: none; border: 0; font-size: 1.5rem; color: var(--tinta-2); cursor: pointer; }
+body.con-hoja .tiempo { visibility: hidden; }
+
+.estado-carga { position: fixed; inset: 0; display: grid; place-items: center; z-index: 20; background: var(--obsidiana); color: var(--tinta-2); font-family: "Fraunces", Georgia, serif; font-size: 1.2rem; transition: opacity .8s; }
+.estado-carga.listo { opacity: 0; pointer-events: none; }
+.estado-carga.error { color: var(--tinta); font-family: "Overpass", sans-serif; font-size: 1rem; padding: 24px; text-align: center; }
+
+.maplibregl-ctrl-attrib { background: rgba(11, 18, 24, .6) !important; color: var(--tinta-2); font-size: 10px; }
+.maplibregl-ctrl-attrib a { color: var(--tinta-2); }
+.maplibregl-ctrl-bottom-right { bottom: 210px; }
+
+/* ------------------------------------------------------------ teléfono */
+@media (max-width: 640px) {
+  body { font-size: 14px; }
+  .titulo { left: 16px; top: max(12px, env(safe-area-inset-top)); }
+  .ruta-nombre { font-size: 1.7rem; }
+  .titulo-sub { font-size: .78rem; margin-top: 4px; }
+  .mandos { top: calc(max(12px, env(safe-area-inset-top)) + 64px); left: 16px; right: auto; }
+  .mando { min-height: 40px; padding: 8px 10px 6px; font-size: .8rem; }
+  .tiempo { padding: 18px 14px max(8px, env(safe-area-inset-bottom)); }
+  .decision { margin-bottom: 10px; }
+  .decision .viaje b { font-size: 1.3rem; }
+  .decision .peor { font-size: .88rem; }
+  .decision .conf { display: block; margin-left: 0; font-size: .74rem; border: 0; }
+  .decision .otra { font-size: .8rem; }
+  .matriz-marco { grid-template-columns: 30px 1fr; gap: 6px; }
+  :root { --alto-matriz: 54px; }
+  .pie { font-size: .68rem; gap: 2px 10px; }
+  .pie .leyenda { width: 80px; }
+  .hito .nombre { font-size: 16px; }
+  .hito.extremo .nombre { font-size: 18px; }
+  .estacion .etq .u { display: none; }
+  .info { top: 120px; right: 12px; max-height: calc(100vh - 380px); }
+  .maplibregl-ctrl-bottom-right { bottom: auto; top: 112px; }
+}
+@media (prefers-reduced-motion: reduce) { .estado-carga { transition: none; } }

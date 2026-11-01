@@ -14,6 +14,9 @@ on:
       url:
         description: "Página publicada a capturar (si ref está vacío)"
         default: "https://jucarfbay.github.io/ecuador-clima-viajes/corredor/"
+      pagina:
+        description: "corredor (ida) o regreso (desde la ubicación hasta San Rafael)"
+        default: "corredor"
 
 permissions:
   contents: write
@@ -65,7 +68,9 @@ jobs:
               mv antes /tmp/antes-src 2>/dev/null || true
             fi
             sleep 2
-            echo "url=http://localhost:8123/corredor/" >> "$GITHUB_OUTPUT"
+            echo "url=http://localhost:8123/${{ inputs.pagina }}/" >> "$GITHUB_OUTPUT"
+          elif [ "${{ inputs.pagina }}" = "regreso" ]; then
+            echo "url=https://jucarfbay.github.io/ecuador-clima-viajes/regreso/" >> "$GITHUB_OUTPUT"
           else
             echo "url=${{ inputs.url }}" >> "$GITHUB_OUTPUT"
           fi
@@ -81,8 +86,12 @@ jobs:
           tail -5 "$GITHUB_WORKSPACE/evidencias/instalacion.txt"
       - name: Capturar
         run: |
-          cp tools/evidencias_corredor.mjs /tmp/pw/
-          node /tmp/pw/evidencias_corredor.mjs "${{ steps.sitio.outputs.url }}" "$GITHUB_WORKSPACE/evidencias" "${{ steps.sitio.outputs.url_antes }}" > evidencias/captura.txt 2>&1 || echo "La captura terminó con error; se publica lo que haya"
+          cp tools/evidencias_corredor.mjs tools/evidencias_regreso.mjs /tmp/pw/
+          if [ "${{ inputs.pagina }}" = "regreso" ]; then
+            node /tmp/pw/evidencias_regreso.mjs "${{ steps.sitio.outputs.url }}" "$GITHUB_WORKSPACE/evidencias" > evidencias/captura.txt 2>&1 || echo "La captura terminó con error; se publica lo que haya"
+          else
+            node /tmp/pw/evidencias_corredor.mjs "${{ steps.sitio.outputs.url }}" "$GITHUB_WORKSPACE/evidencias" "${{ steps.sitio.outputs.url_antes }}" > evidencias/captura.txt 2>&1 || echo "La captura terminó con error; se publica lo que haya"
+          fi
           tail -30 evidencias/captura.txt
       - name: Guardar los datos usados (reproducibilidad)
         run: |

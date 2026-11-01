@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>El corredor vivo: regreso</title>
+  <meta name="description" content="Prueba técnica: el regreso desde donde estés hasta San Rafael (Quito) en relieve real, con la lluvia prevista a la hora en que pasarías.">
+  <meta name="theme-color" content="#0B1218">
+  <link rel="preload" href="fuentes/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../vendor/maplibre/maplibre-gl.css">
+  <link rel="stylesheet" href="regreso.css">
+</head>
+<body>
+  <header class="titulo">
+    <p class="ruta-nombre"><span>Tu ubicación</span><span class="flecha" aria-hidden="true">→</span><span>San Rafael</span></p>
+    <p id="titulo-sub" class="titulo-sub">Regreso a Quito por la E35</p>
+  </header>
+
+  <div class="mandos" role="group" aria-label="Cámara">
+    <button type="button" id="b-recorrer" class="mando principal" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5v14l11-7z"/><path class="i-pausa" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+      <span id="b-recorrer-texto">Recorrer</span></button>
+    <button type="button" class="mando" data-vista="general">Valle</button>
+    <button type="button" class="mando" data-vista="cenital">Cenital</button>
+    <button type="button" class="mando" id="b-info" aria-expanded="false" aria-controls="info">Fuentes</button>
+  </div>
+
+  <section class="tiempo" aria-label="Hora de salida y lluvia en el camino">
+    <!-- el aviso de fondo o relieve incompleto vive en la banda: no tapa la ruta ni sus extremos -->
+    <div id="aviso" class="aviso" role="status" hidden></div>
+    <!-- por qué no se usó la ubicación (si es el caso) -->
+    <div id="ubicacion" class="aviso" role="status" hidden></div>
+    <div id="decision" class="decision" aria-live="polite"></div>
+    <div class="matriz-marco">
+      <div id="ejes" class="ejes" aria-hidden="true"></div>
+      <div class="pista" id="pista">
+        <canvas id="matriz" aria-hidden="true"></canvas>
+        <div id="mejor" class="mejor" aria-hidden="true" hidden></div>
+        <div id="viaje-banda" class="viaje-banda" aria-hidden="true"><span id="banda-pico" class="banda-pico" hidden></span></div>
+        <input id="hora" type="range" min="0" max="95" step="1" value="0" aria-label="Hora de salida (cada columna es una salida; las filas son los tramos de tu ubicación a San Rafael)">
+        <div id="marcas" class="marcas" aria-hidden="true"></div>
+      </div>
+    </div>
+    <p id="pie" class="pie"></p>
+  </section>
+
+  <!-- La escena va después de la línea de tiempo: con el teclado se llega primero a la hora de salida y luego a las estaciones -->
+  <div id="escena" aria-label="Escena 3D del regreso a San Rafael sobre relieve real"></div>
+
+  <section id="hoja" class="hoja" aria-label="Lectura de la estación" hidden>
+    <button type="button" class="cerrar" id="hoja-cerrar" aria-label="Cerrar la lectura y volver a la línea de tiempo">×</button>
+    <div id="hoja-cuerpo"></div>
+  </section>
+
+  <aside id="info" class="info" tabindex="-1" hidden>
+    <button type="button" class="cerrar" id="info-cerrar" aria-label="Cerrar">×</button>
+    <h2>Fuentes y límites</h2>
+    <div id="info-cuerpo"></div>
+  </aside>
+
+  <div id="estado-carga" class="estado-carga" role="status">Cargando datos del corredor…</div>
+
+  <script src="../vendor/maplibre/maplibre-gl.js"></script>
+  <script src="regreso.js"></script>
+</body>
+</html>
