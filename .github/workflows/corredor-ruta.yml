@@ -5,6 +5,10 @@ name: "Corredor: ruta"
 # resultado queda versionado (con fuente y fecha) en site/corredor/datos/ruta.json.
 on:
   workflow_dispatch:
+    inputs:
+      sentido:
+        description: "ida (San Rafael → Baños, /corredor/) o regreso (Baños → San Rafael, respaldo de /regreso/)"
+        default: "ida"
 
 permissions:
   contents: write
@@ -19,12 +23,17 @@ jobs:
         with:
           python-version: "3.12"
       - name: Consultar OSRM
-        run: python tools/ruta_corredor.py site/corredor/datos/ruta.json
+        run: |
+          if [ "${{ inputs.sentido }}" = "regreso" ]; then
+            python tools/ruta_corredor.py site/regreso/datos/ruta.json --regreso
+          else
+            python tools/ruta_corredor.py site/corredor/datos/ruta.json
+          fi
       - name: Guardar en el repositorio
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/corredor/datos/ruta.json
+          git add -A site/*/datos/ruta.json
           git diff --cached --quiet && { echo "Sin cambios"; exit 0; }
           git commit -m "Corredor: geometría vial desde OSRM/OpenStreetMap"
           git push

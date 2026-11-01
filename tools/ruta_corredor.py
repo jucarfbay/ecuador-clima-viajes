@@ -162,11 +162,15 @@ def geocodificar(o: dict) -> dict:
                               "osm": f"{r.get('osm_type')}/{r.get('osm_id')}", "tipo": f"{r.get('category')}/{r.get('type')}"}}
 
 
-def main(destino: str):
+def main(destino: str, regreso: bool = False):
+    """Ida: San Rafael → Baños (/corredor/). Regreso: Baños → San Rafael, respaldo de /regreso/ cuando no se usa la
+    ubicación del visitante (la ruta inversa se consulta aparte: los sentidos de circulación pueden diferir)."""
     cfg = json.loads((RAIZ / "config" / "puntos.json").read_text(encoding="utf-8"))
     por_id = {p["id"]: p for p in cfg["puntos"]}
     origen = geocodificar(ORIGEN)
     hitos = [origen] + [por_id[h] for h in PARADAS]
+    if regreso:
+        hitos = hitos[::-1]
     url = OSRM + ";".join(f"{p['lon']},{p['lat']}" for p in hitos) + \
         "?overview=full&geometries=polyline6&steps=false&annotations=duration,distance"
     req = urllib.request.Request(url, headers={"User-Agent": UA})
@@ -175,7 +179,8 @@ def main(destino: str):
     if datos.get("code") != "Ok":
         raise SystemExit(f"OSRM respondió {datos.get('code')}")
     out = construir(datos, hitos, url, datetime.now(timezone.utc).isoformat(timespec="seconds"))
-    out["origen"] = {"consulta": origen["consulta"], **origen["geocodificado"], "lat": origen["lat"], "lon": origen["lon"]}
+    out["sentido"] = "regreso" if regreso else "ida"
+    out["origen" if not regreso else "san_rafael"] = {"consulta": origen["consulta"], **origen["geocodificado"], "lat": origen["lat"], "lon": origen["lon"]}
     ubicar_pasos(out, [por_id[p] for p in PASOS])
     Path(destino).parent.mkdir(parents=True, exist_ok=True)
     Path(destino).write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
@@ -191,4 +196,5 @@ if __name__ == "__main__":
                                 separators=(",", ":")), encoding="utf-8")
         print("conciliado", f)
     else:
-        main(sys.argv[1] if len(sys.argv) > 1 else "site/corredor/datos/ruta.json")
+        args = [a for a in sys.argv[1:] if a != "--regreso"]
+        main(args[0] if args else "site/corredor/datos/ruta.json", regreso="--regreso" in sys.argv)
