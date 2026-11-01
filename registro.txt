@@ -1,0 +1,53 @@
+[ambato-1440] título: Tu ubicación → San Rafael — 124 km desde cerca de Ambato, unas 1 h 49 min sin tráfico ni paradas
+[ambato-1440] ubicación: (sin aviso de ubicación)
+[ambato-1440] ruta: 124.039 km, 109.49 min; origen {"tipo":"ubicacion","precision_m":25,"manual":false,"cerca":"Ambato"}
+[ambato-1440] hitos: Tu ubicación km 0 min 0 | Latacunga km 38.56 min 33.05 | Machachi km 94.587 min 76.19 | San Rafael km 124.039 min 109.49
+[ambato-1440] salida 08:00 del 2026-11-02: 0 colisiones; extremos en la zona libre: [true,true]
+[ambato-1440] decisión: 08:00 salida → 09:49 llegada lun 2 Lo más lluvioso: 1,4 mm/h hacia las 09:23, cerca de Machachi0 de cada 10 escenarios del ensamble dan ≥ 1 mm Menos lluvia prevista, saliendo de día: 05:00 del mié 4 (lo peor 0,1 mm/h)
+[ambato-1440] salida 19:00 del 2026-11-02: 0 colisiones; extremos en la zona libre: [true,true]
+[ambato-1440] decisión: 19:00 salida → 20:49 llegada lun 2 Lo más lluvioso: 2,9 mm/h hacia las 19:15, cerca de tu ubicación0 de cada 10 escenarios del ensamble dan ≥ 1 mm Menos lluvia prevista, saliendo de día: 05:00 del mié 4 (lo peor 0,1 mm/h)
+[ambato-1440] 49 s
+[ambato-390] título: Tu ubicación → San Rafael — 124 km, 1 h 49 min sin tráfico ni paradas
+[ambato-390] ubicación: (sin aviso de ubicación)
+[ambato-390] ruta: 124.039 km, 109.49 min; origen {"tipo":"ubicacion","precision_m":25,"manual":false,"cerca":"Ambato"}
+[ambato-390] hitos: Tu ubicación km 0 min 0 | Latacunga km 38.56 min 33.05 | Machachi km 94.587 min 76.19 | San Rafael km 124.039 min 109.49
+[ambato-390] salida 08:00 del 2026-11-02: 0 colisiones; extremos en la zona libre: [true,true]
+[ambato-390] decisión: 08:00 salida → 09:49 llegada lun 2 Lo más lluvioso: 1,4 mm/h hacia las 09:23, cerca de Machachi 0 de cada 10 escenarios del ensamble dan ≥ 1 mm Menos lluvia prevista, saliendo de día: 05:00 del mié 4 (lo peor 0,1 mm/h)
+[ambato-390] salida 19:00 del 2026-11-02: 0 colisiones; extremos en la zona libre: [true,true]
+[ambato-390] decisión: 19:00 salida → 20:49 llegada lun 2 Lo más lluvioso: 2,9 mm/h hacia las 19:15, cerca de tu ubicación 0 de cada 10 escenarios del ensamble dan ≥ 1 mm Menos lluvia prevista, saliendo de día: 05:00 del mié 4 (lo peor 0,1 mm/h)
+[ambato-390] 28 s
+[banos-1920] título: Tu ubicación → San Rafael — 166 km desde cerca de Baños, unas 2 h 37 min sin tráfico ni paradas
+[banos-1920] ubicación: (sin aviso de ubicación)
+[banos-1920] ruta: 165.654 km, 157.17 min; origen {"tipo":"ubicacion","precision_m":30,"manual":false,"cerca":"Baños"}
+[banos-1920] hitos: Tu ubicación km 0 min 0 | Pelileo km 23.145 min 30.14 | Ambato km 42.277 min 51.15 | Latacunga km 80.175 min 81.21 | Machachi km 136.202 min 124.08 | San Rafael km 165.654 min 157.17
+[banos-1920] salida 19:00 del 2026-11-02: 0 colisiones; extremos en la zona libre: [true,true]
+[banos-1920] decisión: 19:00 salida → 21:37 llegada lun 2 Lo más lluvioso: 3,1 mm/h hacia las 20:00, cerca de Ambato1 de cada 10 escenarios del ensamble dan ≥ 1 mm Menos lluvia prevista, saliendo de día: 05:00 del mié 4 (lo peor 0,2 mm/h)
+[banos-1920] 51 s
+[banos-360] título: Tu ubicación → San Rafael — 166 km, 2 h 37 min sin tráfico ni paradas
+[banos-360] ubicación: (sin aviso de ubicación)
+[banos-360] ruta: 165.654 km, 157.17 min; origen {"tipo":"ubicacion","precision_m":30,"manual":false,"cerca":"Baños"}
+[banos-360] hitos: Tu ubicación km 0 min 0 | Pelileo km 23.145 min 30.14 | Ambato km 42.277 min 51.15 | Latacunga km 80.175 min 81.21 | Machachi km 136.202 min 124.08 | San Rafael km 165.654 min 157.17
+[banos-360] salida 19:00 del 2026-11-02: 0 colisiones; extremos en la zona libre: [true,true]
+[banos-360] decisión: 19:00 salida → 21:37 llegada lun 2 Lo más lluvioso: 3,1 mm/h hacia las 20:00, cerca de Ambato 1 de cada 10 escenarios del ensamble dan ≥ 1 mm Menos lluvia prevista, saliendo de día: 05:00 del mié 4 (lo peor 0,2 mm/h)
+[banos-360] 22 s
+[sin-permiso-1440] título: Baños → San Rafael — 163 km, unas 2 h 49 min sin tráfico ni paradas
+[sin-permiso-1440] ubicación: No diste permiso para usar tu ubicación: se muestra el regreso desde Baños. Intentar de nuevo
+[sin-permiso-1440] ruta: 163.364 km, 169.41 min; origen "respaldo desde Baños"
+[sin-permiso-1440] hitos: Baños km 0 min 0 | Pelileo km 23.107 min 30.83 | Ambato km 40.531 min 53.05 | Latacunga km 80.9 min 91.63 | Machachi km 133.9122 min 136.02 | San Rafael km 163.364 min 169.41
+[sin-permiso-1440] salida 19:00 del 2026-11-02: 0 colisiones; extremos en la zona libre: [true,true]
+[sin-permiso-1440] decisión: 19:00 salida → 21:49 llegada lun 2 Lo más lluvioso: 3,1 mm/h hacia las 20:03, cerca de Ambato1 de cada 10 escenarios del ensamble dan ≥ 1 mm Menos lluvia prevista, saliendo de día: 05:00 del mié 4 (lo peor 0,2 mm/h)
+[sin-permiso-1440] 37 s
+[fuera-390] título: Baños → San Rafael — 163 km, 2 h 49 min sin tráfico ni paradas
+[fuera-390] ubicación: Estás fuera del corredor con datos de lluvia (de San Rafael a Baños): se muestra el regreso desde Baños. Intentar de nuevo
+[fuera-390] ruta: 163.364 km, 169.41 min; origen "respaldo desde Baños"
+[fuera-390] hitos: Baños km 0 min 0 | Pelileo km 23.107 min 30.83 | Ambato km 40.531 min 53.05 | Latacunga km 80.9 min 91.63 | Machachi km 133.9122 min 136.02 | San Rafael km 163.364 min 169.41
+[fuera-390] salida 19:00 del 2026-11-02: 0 colisiones; extremos en la zona libre: [true,true]
+[fuera-390] decisión: 19:00 salida → 21:49 llegada lun 2 Lo más lluvioso: 3,1 mm/h hacia las 20:03, cerca de Ambato 1 de cada 10 escenarios del ensamble dan ≥ 1 mm Menos lluvia prevista, saliendo de día: 05:00 del mié 4 (lo peor 0,2 mm/h)
+[fuera-390] 24 s
+[desde-latacunga-1440] título: Tu ubicación → San Rafael — 82 km desde cerca de Latacunga, unas 1 h 17 min sin tráfico ni paradas
+[desde-latacunga-1440] ubicación: (sin aviso de ubicación)
+[desde-latacunga-1440] ruta: 82.414 km, 77.23 min; origen {"tipo":"ubicacion","precision_m":null,"manual":true,"cerca":"Latacunga"}
+[desde-latacunga-1440] hitos: Tu ubicación km 0 min 0 | Machachi km 52.962 min 44.02 | San Rafael km 82.414 min 77.23
+[desde-latacunga-1440] salida 19:00 del 2026-11-02: 0 colisiones; extremos en la zona libre: [true,true]
+[desde-latacunga-1440] decisión: 19:00 salida → 20:17 llegada lun 2 Lo más lluvioso: 2,9 mm/h hacia las 19:03, cerca de tu ubicación0 de cada 10 escenarios del ensamble dan ≥ 1 mm Menos lluvia prevista, saliendo de día: 06:00 (sin lluvia en el camino)
+[desde-latacunga-1440] 36 s
